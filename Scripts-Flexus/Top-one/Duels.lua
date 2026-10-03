@@ -1,4 +1,4 @@
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Synergy-Team-Official/Scripts/refs/heads/main/Uis/WindUI-Shiny.lua"))()
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/FlexusHub/Flexus-Lib/Flexus-Team/WindUi-FlexusHub.lua"))()
 
 local UserInputService = game:GetService("UserInputService")
 local isPC = (function()
@@ -2525,31 +2525,46 @@ local function refreshFOVFrame(frame, visible, radius, color)
     end
 end
 
-RunService.RenderStepped:Connect(function()
-    -- Show FOV solo con el toggle (no exige feature activa, asi se ve al configurar)
-    pcall(function()
-        refreshFOVFrame(SilentFOVFrameNew, silentAimFOVVisible == true, silentAimFOVRadius, silentAimFOVColor)
-    end)
-    pcall(function()
-        refreshFOVFrame(AutoFOVFrameNew, autoShootFOVVisible == true, autoShootFOVRadius, autoShootFOVColor)
-    end)
-    pcall(function()
-        refreshFOVFrame(CamlockFOVFrameNew, camlockFOVVisible == true, camlockFOVRadius, camlockFOVColor)
-    end)
-    -- Drawing backup (PC)
-    pcall(function()
-        local vs = camera.ViewportSize
-        local center = Vector2.new(vs.X / 2, vs.Y / 2)
-        if CamlockFOVCircle then
-            updateDrawingFOV(CamlockFOVCircle, fovRenderState.Camlock, camlockFOVVisible == true, center, camlockFOVRadius, camlockFOVColor)
-        end
-        if SilentFOVCircle then
-            updateDrawingFOV(SilentFOVCircle, fovRenderState.Silent, silentAimFOVVisible == true, center, silentAimFOVRadius, silentAimFOVColor)
-        end
-        if AutoFOVCircle then
-            updateDrawingFOV(AutoFOVCircle, fovRenderState.Auto, autoShootFOVVisible == true, center, autoShootFOVRadius, autoShootFOVColor)
-        end
-    end)
+RunService.fovRenderConnection = RunService.RenderStepped:Connect(function()
+    if dmvsDestroyed then return end
+    -- UN solo FOV visible: GUI en mobile / Drawing en PC (nunca ambos)
+    if useGUIFOV then
+        pcall(function()
+            refreshFOVFrame(SilentFOVFrameNew, silentAimFOVVisible == true, silentAimFOVRadius, silentAimFOVColor)
+        end)
+        pcall(function()
+            refreshFOVFrame(AutoFOVFrameNew, autoShootFOVVisible == true, autoShootFOVRadius, autoShootFOVColor)
+        end)
+        pcall(function()
+            refreshFOVFrame(CamlockFOVFrameNew, camlockFOVVisible == true, camlockFOVRadius, camlockFOVColor)
+        end)
+        -- ocultar Drawing si existiera
+        pcall(function()
+            if CamlockFOVCircle then CamlockFOVCircle.Visible = false end
+            if SilentFOVCircle then SilentFOVCircle.Visible = false end
+            if AutoFOVCircle then AutoFOVCircle.Visible = false end
+        end)
+    else
+        pcall(function()
+            local vs = camera.ViewportSize
+            local center = Vector2.new(vs.X / 2, vs.Y / 2)
+            if CamlockFOVCircle then
+                updateDrawingFOV(CamlockFOVCircle, fovRenderState.Camlock, camlockFOVVisible == true, center, camlockFOVRadius, camlockFOVColor)
+            end
+            if SilentFOVCircle then
+                updateDrawingFOV(SilentFOVCircle, fovRenderState.Silent, silentAimFOVVisible == true, center, silentAimFOVRadius, silentAimFOVColor)
+            end
+            if AutoFOVCircle then
+                updateDrawingFOV(AutoFOVCircle, fovRenderState.Auto, autoShootFOVVisible == true, center, autoShootFOVRadius, autoShootFOVColor)
+            end
+        end)
+        -- ocultar GUI FOV si existiera
+        pcall(function()
+            if SilentFOVFrameNew then SilentFOVFrameNew.Visible = false end
+            if AutoFOVFrameNew then AutoFOVFrameNew.Visible = false end
+            if CamlockFOVFrameNew then CamlockFOVFrameNew.Visible = false end
+        end)
+    end
 end)
 
 local function installHook()
@@ -2984,7 +2999,7 @@ triggerSightParams.FilterType = Enum.RaycastFilterType.Exclude
 
 local Window = WindUI:CreateWindow({
     Title = "FlexusHub [Duels]",
-    Author = "FlexusHub",
+    Author = "Flexus-Team",
     Folder = "FlexusHub_DMVS",
     ConfigName = "FlexusHub_DMVS",
     Theme = "Graphite",
@@ -3923,6 +3938,8 @@ task.spawn(function()
     gui.DisplayOrder = 125
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     pcall(function() gui.Parent = host end)
+    _G.VXS_BubbleGui = gui
+    _G.VXS_Bubbles = bubbles
     if not gui.Parent then gui.Parent = player:WaitForChild("PlayerGui") end
 
     local defs = {
@@ -5530,6 +5547,29 @@ Window:OnDestroy(function()
     pcall(vxsSaveConfig)
 
     dmvsDestroyed = true
+    -- Apagar features visuales / combate
+    pcall(function() silentAimEnabled = false end)
+    pcall(function() autoShootEnabled = false end)
+    pcall(function() camlockEnabled = false end)
+    pcall(function() triggerbotEnabled = false end)
+    pcall(function() hitboxEnabled = false end)
+    pcall(function() silentAimFOVVisible = false end)
+    pcall(function() autoShootFOVVisible = false end)
+    pcall(function() camlockFOVVisible = false end)
+    -- Bubbles fuera
+    pcall(function()
+        if _G.VXS_BubbleGui then _G.VXS_BubbleGui:Destroy() end
+        _G.VXS_BubbleGui = nil
+        _G.VXS_Bubbles = nil
+        _G.VXS_UpdateBubble = nil
+        _G.VXS_BubbleShow = nil
+        _G.VXS_BubbleDragMode = nil
+    end)
+    -- Desconectar FOV render
+    pcall(function()
+        if fovRenderConnection then fovRenderConnection:Disconnect() end
+    end)
+
     dmvsAutoMacroState.Enabled = false
     dmvsAutoMacroState.CurrentTarget = nil
     if dmvsAutoMacroState.ManagedGun then
@@ -5557,21 +5597,21 @@ Window:OnDestroy(function()
     refreshAllNameElements()
     restoreSkybox()
     restoreRTX()
-    if not isPC then
-        pcall(function() if SilentFOVCircle then SilentFOVCircle:Remove() end end)
-        pcall(function() if AutoFOVCircle then AutoFOVCircle:Remove() end end)
-    end
-    pcall(function() CamlockFOVCircle:Remove() end)
-    if useGUIFOV then
-        pcall(function()
-            if guiCamlockFOV and guiCamlockFOV.Container then guiCamlockFOV.Container:Destroy() end
-            if guiSilentFOV and guiSilentFOV.Container then guiSilentFOV.Container:Destroy() end
-            if guiAutoFOV and guiAutoFOV.Container then guiAutoFOV.Container:Destroy() end
-        end)
-    end
+    -- FOV Drawing + GUI: limpiar siempre
+    pcall(function() if SilentFOVCircle then SilentFOVCircle.Visible = false; SilentFOVCircle:Remove() end end)
+    pcall(function() if AutoFOVCircle then AutoFOVCircle.Visible = false; AutoFOVCircle:Remove() end end)
+    pcall(function() if CamlockFOVCircle then CamlockFOVCircle.Visible = false; CamlockFOVCircle:Remove() end end)
+    pcall(function()
+        if guiCamlockFOV and guiCamlockFOV.Container then guiCamlockFOV.Container:Destroy() end
+        if guiSilentFOV and guiSilentFOV.Container then guiSilentFOV.Container:Destroy() end
+        if guiAutoFOV and guiAutoFOV.Container then guiAutoFOV.Container:Destroy() end
+    end)
     pcall(function() if SilentFOVGuiNew then SilentFOVGuiNew:Destroy() end end)
     pcall(function() if AutoFOVGuiNew then AutoFOVGuiNew:Destroy() end end)
     pcall(function() if CamlockFOVGuiNew then CamlockFOVGuiNew:Destroy() end end)
+    pcall(function() if SilentFOVFrameNew then SilentFOVFrameNew:Destroy() end end)
+    pcall(function() if AutoFOVFrameNew then AutoFOVFrameNew:Destroy() end end)
+    pcall(function() if CamlockFOVFrameNew then CamlockFOVFrameNew:Destroy() end end)
     pcall(function() heartbeatConnection:Disconnect() end)
     pcall(function() camlockConnection:Disconnect() end)
     pcall(function() triggerbotConnection:Disconnect() end)
