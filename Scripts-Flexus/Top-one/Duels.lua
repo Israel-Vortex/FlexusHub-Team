@@ -1,23 +1,28 @@
+print("[FlexusHub][Duels] iniciando...")
 local WindUI
 do
     local urls = {
-        "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua",
         "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
         "https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua",
+        "https://raw.githubusercontent.com/Synergy-Team-Official/Scripts/refs/heads/main/Uis/WindUI-Shiny.lua",
+        "https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/FlexusHub/Flexus-Lib/Flexus-Team/WindUi-FlexusHub.lua",
     }
     for _, url in ipairs(urls) do
+        print("[FlexusHub][Duels] WindUI try:", url:sub(1, 75))
         local ok, res = pcall(function()
             return loadstring(game:HttpGet(url))()
         end)
         if ok and res then
             WindUI = res
+            print("[FlexusHub][Duels] WindUI OK")
             break
+        else
+            warn("[FlexusHub][Duels] WindUI fail:", tostring(res))
         end
     end
 end
 if not WindUI then
-    warn("[FlexusHub][Duels] No se pudo cargar WindUI")
-    return
+    error("[FlexusHub][Duels] No se pudo cargar WindUI")
 end
 
 local UserInputService = game:GetService("UserInputService")
@@ -2545,7 +2550,8 @@ local function refreshFOVFrame(frame, visible, radius, color)
     end
 end
 
-RunService.fovRenderConnection = RunService.RenderStepped:Connect(function()
+local fovRenderConnection
+fovRenderConnection = RunService.RenderStepped:Connect(function()
     if dmvsDestroyed then return end
     -- UN solo FOV visible: GUI en mobile / Drawing en PC (nunca ambos)
     if useGUIFOV then
@@ -5587,7 +5593,7 @@ Window:OnDestroy(function()
     end)
     -- Desconectar FOV render
     pcall(function()
-        if fovRenderConnection then fovRenderConnection:Disconnect() end
+        if fovRenderConnection then pcall(function() fovRenderConnection:Disconnect() end) end
     end)
 
     dmvsAutoMacroState.Enabled = false
