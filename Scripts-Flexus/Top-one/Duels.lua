@@ -1,4 +1,24 @@
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/FlexusHub/Flexus-Lib/Flexus-Team/WindUi-FlexusHub.lua"))()
+local WindUI
+do
+    local urls = {
+        "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua",
+        "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
+        "https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua",
+    }
+    for _, url in ipairs(urls) do
+        local ok, res = pcall(function()
+            return loadstring(game:HttpGet(url))()
+        end)
+        if ok and res then
+            WindUI = res
+            break
+        end
+    end
+end
+if not WindUI then
+    warn("[FlexusHub][Duels] No se pudo cargar WindUI")
+    return
+end
 
 local UserInputService = game:GetService("UserInputService")
 local isPC = (function()
