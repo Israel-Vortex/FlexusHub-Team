@@ -1,4 +1,4 @@
-print("[FlexusHub][Duels] iniciando...")
+
 local WindUI
 do
     local urls = {
@@ -8,13 +8,11 @@ do
         "https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/FlexusHub/Flexus-Lib/Flexus-Team/WindUi-FlexusHub.lua",
     }
     for _, url in ipairs(urls) do
-        print("[FlexusHub][Duels] WindUI try:", url:sub(1, 75))
         local ok, res = pcall(function()
             return loadstring(game:HttpGet(url))()
         end)
         if ok and res then
             WindUI = res
-            print("[FlexusHub][Duels] WindUI OK")
             break
         else
             warn("[FlexusHub][Duels] WindUI fail:", tostring(res))
@@ -3588,7 +3586,8 @@ combateTab:Colorpicker({
 
 -- ---------- Silent Aim ----------
 combateTab:Divider({Title = "Silent Aim"})
-combateTab:Toggle({
+_G.VXS_CombatToggles = _G.VXS_CombatToggles or {}
+_G.VXS_CombatToggles.silent = combateTab:Toggle({
     Title = "Silent Aim",
     Desc = "Redirige las balas al enemigo (solo enemigos).",
     Flag = "VXS_SilentAim",
@@ -3633,7 +3632,8 @@ combateTab:Slider({
 
 -- ---------- Auto Shoot ----------
 combateTab:Divider({Title = "Auto Shoot"})
-combateTab:Toggle({
+_G.VXS_CombatToggles = _G.VXS_CombatToggles or {}
+_G.VXS_CombatToggles.auto = combateTab:Toggle({
     Title = "Auto Shoot",
     Desc = "Dispara si ya tienes el arma equipada (no equipa sola).",
     Flag = "VXS_AutoShoot",
@@ -3670,7 +3670,8 @@ combateTab:Dropdown({
 
 -- ---------- Hitbox ----------
 combateTab:Divider({Title = "Hitbox"})
-combateTab:Toggle({
+_G.VXS_CombatToggles = _G.VXS_CombatToggles or {}
+_G.VXS_CombatToggles.hitbox = combateTab:Toggle({
     Title = "Enable Hitbox",
     Desc = "Hitbox expandida solo en enemigos.",
     Flag = "HitboxEnable",
@@ -3718,7 +3719,8 @@ combateTab:Slider({
 
 -- ---------- Macro (tap to shoot) ----------
 combateTab:Divider({Title = "Macro"})
-combateTab:Toggle({
+_G.VXS_CombatToggles = _G.VXS_CombatToggles or {}
+_G.VXS_CombatToggles.macro = combateTab:Toggle({
     Title = "Enable Macro",
     Desc = "Al tocar/clic (fuera de zona muerta) equipa y dispara.",
     Flag = "MacroEnable",
@@ -3737,7 +3739,8 @@ macroShootDelay = 0.10
 
 -- ---------- TriggerBot (ex Macro 360) ----------
 combateTab:Divider({Title = "TriggerBot"})
-combateTab:Toggle({
+_G.VXS_CombatToggles = _G.VXS_CombatToggles or {}
+_G.VXS_CombatToggles.trigger = combateTab:Toggle({
     Title = "TriggerBot",
     Desc = "Detecta enemigo, equipa arma y dispara solo. Opciones fijas internas.",
     Flag = "VXS_TriggerBot",
@@ -4026,7 +4029,7 @@ task.spawn(function()
             hitboxEnabled = value
             if not value then pcall(clearAllHitboxes) end
         end
-        -- Sync visual de toggles del menu
+        -- Sync visual de toggles del menu (bubble <-> toggle)
         pcall(function()
             local flagMap = {
                 silent = "VXS_SilentAim",
@@ -4040,22 +4043,35 @@ task.spawn(function()
             if refs and refs[key] then
                 local el = refs[key]
                 if type(el) == "table" then
-                    if el.Set then el:Set(value)
-                    elseif el.SetValue then el:SetValue(value)
-                    elseif el.Update then el:Update(value)
-                    end
+                    pcall(function()
+                        if el.Set then el:Set(value)
+                        elseif el.SetValue then el:SetValue(value)
+                        elseif el.SetState then el:SetState(value)
+                        elseif el.Update then el:Update(value)
+                        elseif el.Callback and el.Value ~= nil then
+                            el.Value = value
+                        end
+                    end)
                 end
             end
-            -- WindUI flag / config fallbacks
             if flag and WindUI then
-                if WindUI.SetFlag then WindUI:SetFlag(flag, value) end
-                if WindUI.Flags and type(WindUI.Flags) == "table" then
-                    WindUI.Flags[flag] = value
+                pcall(function()
+                    if WindUI.SetFlag then WindUI:SetFlag(flag, value) end
+                    if type(WindUI.Flags) == "table" then WindUI.Flags[flag] = value end
+                end)
+            end
+            if flag and Window then
+                pcall(function()
+                    if Window.SetFlag then Window:SetFlag(flag, value) end
+                    if Window.Flags and type(Window.Flags) == "table" then Window.Flags[flag] = value end
+                end)
+            end
+            -- ConfigManager de WindUI
+            pcall(function()
+                if Window and Window.ConfigManager and Window.ConfigManager.Set then
+                    Window.ConfigManager:Set(flag, value)
                 end
-            end
-            if flag and Window and Window.SetFlag then
-                Window:SetFlag(flag, value)
-            end
+            end)
         end)
         pcall(function()
             if notify then notify({Title = key, Content = value and "ON" or "OFF"}) end
@@ -4141,7 +4157,10 @@ task.spawn(function()
         end
 
         btn.MouseButton1Click:Connect(function()
-            if bubbleDragMode and moved then return end
+            if bubbleDragMode and moved then
+                pcall(function() if _G.VXS_ScheduleSave then _G.VXS_ScheduleSave() end end)
+                return
+            end
             if def.locked then
                 pcall(function() if notify then notify({Title = def.tip, Content = "Bloqueado (Proximamente)"}) end end)
                 styleBtn(btn, false)
@@ -4154,6 +4173,14 @@ task.spawn(function()
 
         bubbles[def.key] = btn
         styleBtn(btn, getState(def.key))
+        -- restaurar posicion guardada
+        pcall(function()
+            local saved = _G.VXS_SavedBubblePos and _G.VXS_SavedBubblePos[def.key]
+            if saved then
+                btn.Position = UDim2.new(saved.XS or 1, saved.XO or -54, saved.YS or 0.36, saved.YO or 0)
+                if saved.Visible ~= nil then btn.Visible = saved.Visible and true or false end
+            end
+        end)
     end
 
     _G.VXS_UpdateBubble = function(key, state)
@@ -5343,8 +5370,26 @@ local function vxsEnsureFolder()
 end
 
 local function vxsCollectState()
+    local bubblePos = {}
+    pcall(function()
+        local bbs = _G.VXS_Bubbles
+        if type(bbs) == "table" then
+            for key, btn in pairs(bbs) do
+                if btn and btn.Position then
+                    bubblePos[key] = {
+                        XS = btn.Position.X.Scale,
+                        XO = btn.Position.X.Offset,
+                        YS = btn.Position.Y.Scale,
+                        YO = btn.Position.Y.Offset,
+                        Visible = btn.Visible and true or false,
+                    }
+                end
+            end
+        end
+    end)
+    local bv = _G.VXS_BubbleVisibility or {}
     return {
-        version = 1,
+        version = 2,
         toggles = {
             camlockEnabled = camlockEnabled,
             camlockOnlyGun = camlockOnlyGun,
@@ -5359,12 +5404,12 @@ local function vxsCollectState()
             espEnabled = espEnabled,
             killSound = dmvsKillSoundState and dmvsKillSoundState.Enabled or false,
             deadZoneVisible = deadZoneFrame and deadZoneFrame.Visible or false,
-            bubbleDrag = false, -- no persist drag mode forced
-            bubbleShowSilent = false,
-            bubbleShowAuto = false,
-            bubbleShowMacro = false,
-            bubbleShowTrigger = false,
-            bubbleShowHitbox = false,
+            bubbleDrag = _G.VXS_BubbleDragState and true or false,
+            bubbleShowSilent = bv.silent and true or false,
+            bubbleShowAuto = bv.auto and true or false,
+            bubbleShowMacro = bv.macro and true or false,
+            bubbleShowTrigger = bv.trigger and true or false,
+            bubbleShowHitbox = bv.hitbox and true or false,
         },
         values = {
             camlockTargetPart = camlockTargetPart,
@@ -5375,6 +5420,7 @@ local function vxsCollectState()
             silentAimMode = silentAimMode,
             silentAimFOVRadius = silentAimFOVRadius,
             autoShootTargetPart = autoShootTargetPart,
+            autoShootFOVRadius = autoShootFOVRadius,
             hitboxSizeValue = hitboxSizeValue,
             hitboxTransparency = hitboxTransparency,
             triggerRange = dmvsAutoMacroState and dmvsAutoMacroState.Range or 250,
@@ -5384,11 +5430,10 @@ local function vxsCollectState()
         colors = {
             camlockFOV = camlockFOVColor and {R = camlockFOVColor.R, G = camlockFOVColor.G, B = camlockFOVColor.B} or nil,
             silentFOV = silentAimFOVColor and {R = silentAimFOVColor.R, G = silentAimFOVColor.G, B = silentAimFOVColor.B} or nil,
+            autoFOV = autoShootFOVColor and {R = autoShootFOVColor.R, G = autoShootFOVColor.G, B = autoShootFOVColor.B} or nil,
             espBox = ESP_CONFIG and ESP_CONFIG.BoxColor and {R = ESP_CONFIG.BoxColor.R, G = ESP_CONFIG.BoxColor.G, B = ESP_CONFIG.BoxColor.B} or nil,
         },
-        bubbles = {
-            -- posiciones se guardan si existen
-        },
+        bubbles = bubblePos,
     }
 end
 
@@ -5493,7 +5538,22 @@ local function vxsApplyState(data)
         ESP_CONFIG.BoxColor = Color3.new(col.espBox.R or 1, col.espBox.G or 1, col.espBox.B or 1)
     end
 
-    -- Bubbles visibility + active states
+    -- Bubbles visibility + active states + posiciones
+    if type(data.bubbles) == "table" then
+        _G.VXS_SavedBubblePos = data.bubbles
+        pcall(function()
+            local bbs = _G.VXS_Bubbles
+            if type(bbs) == "table" then
+                for key, pos in pairs(data.bubbles) do
+                    local btn = bbs[key]
+                    if btn and type(pos) == "table" then
+                        btn.Position = UDim2.new(pos.XS or 1, pos.XO or -54, pos.YS or 0.36, pos.YO or 0)
+                        if pos.Visible ~= nil then btn.Visible = pos.Visible and true or false end
+                    end
+                end
+            end
+        end)
+    end
     local bv = _G.VXS_BubbleVisibility
     if bv then
         bv.silent = tg.bubbleShowSilent and true or false
@@ -5520,6 +5580,28 @@ local function vxsApplyState(data)
             _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
         end)
     end
+    -- Sincronizar toggles del menu con estado cargado
+    pcall(function()
+        local refs = _G.VXS_CombatToggles or {}
+        local map = {
+            silent = silentAimManualEnabled,
+            auto = autoShootEnabled,
+            macro = macroActive,
+            trigger = dmvsAutoMacroState and dmvsAutoMacroState.Enabled,
+            hitbox = hitboxEnabled,
+        }
+        for k, val in pairs(map) do
+            local el = refs[k]
+            if el and type(el) == "table" then
+                pcall(function()
+                    if el.Set then el:Set(val)
+                    elseif el.SetValue then el:SetValue(val)
+                    elseif el.SetState then el:SetState(val)
+                    end
+                end)
+            end
+        end
+    end)
     if tg.bubbleDrag and _G.VXS_BubbleDragMode then
         pcall(function() _G.VXS_BubbleDragMode(true) end)
         _G.VXS_BubbleDragState = true
@@ -5554,7 +5636,7 @@ end)
 -- Guardar periodicamente
 task.spawn(function()
     while not dmvsDestroyed do
-        task.wait(8)
+        task.wait(4)
         if vxsConfigLoaded then
             pcall(vxsSaveConfig)
         end
@@ -5659,6 +5741,34 @@ Window:OnDestroy(function()
     if screenGui then
         screenGui:Destroy()
     end
+end)
+
+
+
+-- ==========================================
+-- AUTO REJOIN / SERVER HOP: re-ejecutar script
+-- ==========================================
+pcall(function()
+    local queue = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
+        or (queueonteleport)
+    if not queue then return end
+    local DUELS_URL = "https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/Scripts-Flexus/Top-one/Duels.lua"
+    local code = [[
+        if not game:IsLoaded() then game.Loaded:Wait() end
+        task.wait(1.5)
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet("]] .. DUELS_URL .. [["))()
+        end)
+        if not ok then warn("[FlexusHub] auto-rejoin load fail:", err) end
+    ]]
+    queue(code)
+end)
+
+-- Guardar al cerrar el juego / teleport
+pcall(function()
+    game:GetService("Players").LocalPlayer.OnTeleport:Connect(function()
+        pcall(function() if vxsSaveConfig then vxsSaveConfig() end end)
+    end)
 end)
 
 end)()
