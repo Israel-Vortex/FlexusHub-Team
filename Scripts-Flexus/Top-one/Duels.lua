@@ -3065,37 +3065,58 @@ local Window = WindUI:CreateWindow({
 Window:SetIconSize(30)
 
 local function syncLoadedControlEffects()
-    if not Window.ConfigManager or type(Window.ConfigManager.GetAll) ~= "function" then
-        return
-    end
-
-    local saved = Window.ConfigManager:GetAll() or {}
     if type(Window.ListFlags) ~= "function" then
         return
     end
 
-    for _, flag in ipairs(Window:ListFlags()) do
-        if saved[flag] ~= nil then
-            local element = Window:GetFlagElement(flag)
-            local elementType = element and element.__type
-            local needsCallback = elementType == "Dropdown"
-                or elementType == "Segmented"
-                or elementType == "Colorpicker"
-                or elementType == "Keybind"
-                or elementType == "ToggleKeybind"
-                or elementType == "Stats"
+    local saved = {}
+    pcall(function()
+        if Window.ConfigManager and type(Window.ConfigManager.GetAll) == "function" then
+            saved = Window.ConfigManager:GetAll() or {}
+        end
+    end)
 
-            if needsCallback and element and type(element.Callback) == "function" then
-                local value = Window:GetFlag(flag)
-                if elementType == "Keybind" or elementType == "ToggleKeybind" then
-                    value = element.Value
+    for _, flag in ipairs(Window:ListFlags()) do
+        local element = nil
+        pcall(function()
+            if Window.GetFlagElement then element = Window:GetFlagElement(flag) end
+        end)
+        local value = nil
+        pcall(function()
+            if Window.GetFlag then value = Window:GetFlag(flag) end
+        end)
+        if value == nil and saved[flag] ~= nil then
+            value = saved[flag]
+        end
+        if element and value ~= nil then
+            local elementType = element.__type
+            -- Forzar visual del control
+            pcall(function()
+                if element.Set then element:Set(value)
+                elseif element.SetValue then element:SetValue(value)
+                elseif element.SetState then element:SetState(value)
                 end
-                if value ~= nil then
+            end)
+            -- Disparar callback para aplicar logica + bubbles
+            if type(element.Callback) == "function" then
+                if elementType == "Keybind" or elementType == "ToggleKeybind" then
+                    pcall(element.Callback, element.Value)
+                else
                     pcall(element.Callback, value)
                 end
             end
         end
     end
+    -- bubbles segun estado real
+    pcall(function()
+        if _G.VXS_UpdateBubble then
+            _G.VXS_UpdateBubble("silent", silentAimManualEnabled)
+            _G.VXS_UpdateBubble("auto", autoShootEnabled)
+            _G.VXS_UpdateBubble("macro", macroActive)
+            _G.VXS_UpdateBubble("trigger", dmvsAutoMacroState and dmvsAutoMacroState.Enabled)
+            _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
+        end
+    end)
 end
 
 _G.SNG_SCRIPT_READY = true
@@ -4064,12 +4085,32 @@ task.spawn(function()
                 pcall(function()
                     if Window.SetFlag then Window:SetFlag(flag, value) end
                     if Window.Flags and type(Window.Flags) == "table" then Window.Flags[flag] = value end
+                    local el = nil
+                    pcall(function()
+                        if Window.GetFlagElement then el = Window:GetFlagElement(flag) end
+                    end)
+                    if el then
+                        pcall(function()
+                            if el.Set then el:Set(value)
+                            elseif el.SetValue then el:SetValue(value)
+                            elseif el.SetState then el:SetState(value)
+                            end
+                        end)
+                    end
                 end)
             end
-            -- ConfigManager de WindUI
             pcall(function()
                 if Window and Window.ConfigManager and Window.ConfigManager.Set then
                     Window.ConfigManager:Set(flag, value)
+                end
+                if Window and Window.CurrentConfig and Window.CurrentConfig.Set then
+                    Window.CurrentConfig:Set(flag, value)
+                end
+            end)
+            -- Guardar ya (WindUI + JSON)
+            pcall(function()
+                if Window and Window.CurrentConfig and Window.CurrentConfig.Save then
+                    task.defer(function() pcall(function() Window.CurrentConfig:Save() end) end)
                 end
             end)
         end)
@@ -4198,10 +4239,21 @@ task.spawn(function()
         bubbleDragMode = v and true or false
     end
     _G.VXS_SetCombatFromUI = function(key, value)
-        -- llamado desde toggles del menu Combate para refrescar bubble
         local btn = bubbles[key]
         if btn then styleBtn(btn, value and true or false) end
     end
+    -- re-aplicar estados y visual de toggles (config puede haber cargado antes)
+    task.defer(function()
+        task.wait(0.2)
+        pcall(function()
+            if vxsSyncAllToggleVisuals then vxsSyncAllToggleVisuals() end
+        end)
+        styleBtn(bubbles.silent, getState("silent"))
+        styleBtn(bubbles.auto, getState("auto"))
+        styleBtn(bubbles.macro, getState("macro"))
+        styleBtn(bubbles.trigger, getState("trigger"))
+        styleBtn(bubbles.hitbox, getState("hitbox"))
+    end)
 end)
 
 end)()
@@ -5478,9 +5530,100 @@ _G.VXS_ScheduleSave = function()
         return
     end
     task.delay(0.35, function()
+        pcall(function()
+            if Window and Window.CurrentConfig and Window.CurrentConfig.Save then
+                Window.CurrentConfig:Save()
+            end
+        end)
         vxsSaveConfig()
     end)
 end
+
+
+-- Forzar que el toggle de WindUI se vea ON/OFF visualmente
+local function vxsForceToggleVisual(el, value)
+    if type(el) ~= "table" then return false end
+    value = value and true or false
+    local ok = false
+    pcall(function()
+        if el.Set then el:Set(value); ok = true end
+    end)
+    if not ok then
+        pcall(function()
+            if el.SetValue then el:SetValue(value); ok = true end
+        end)
+    end
+    if not ok then
+        pcall(function()
+            if el.SetState then el:SetState(value); ok = true end
+        end)
+    end
+    -- props internas comunes WindUI
+    pcall(function()
+        if el.Value ~= nil then el.Value = value end
+        if el.State ~= nil then el.State = value end
+        if el.Toggled ~= nil then el.Toggled = value end
+        if el.Enabled ~= nil and type(el.Enabled) == "boolean" then end
+    end)
+    -- UI objects
+    pcall(function()
+        if el.Button and el.Button.BackgroundColor3 then
+            -- no color hack; prefer API
+        end
+        if type(el.Update) == "function" then el:Update(value) end
+        if type(el.Refresh) == "function" then el:Refresh() end
+        if type(el.Render) == "function" then el:Render() end
+    end)
+    return ok
+end
+
+local function vxsSyncAllToggleVisuals()
+    local refs = _G.VXS_CombatToggles or {}
+    local map = {
+        silent = silentAimManualEnabled,
+        auto = autoShootEnabled,
+        macro = macroActive,
+        trigger = dmvsAutoMacroState and dmvsAutoMacroState.Enabled,
+        hitbox = hitboxEnabled,
+    }
+    for k, val in pairs(map) do
+        vxsForceToggleVisual(refs[k], val)
+    end
+    -- bubbles
+    pcall(function()
+        if _G.VXS_UpdateBubble then
+            _G.VXS_UpdateBubble("silent", silentAimManualEnabled)
+            _G.VXS_UpdateBubble("auto", autoShootEnabled)
+            _G.VXS_UpdateBubble("macro", macroActive)
+            _G.VXS_UpdateBubble("trigger", dmvsAutoMacroState and dmvsAutoMacroState.Enabled)
+            _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
+        end
+    end)
+    -- Flags WindUI / Window
+    pcall(function()
+        local flags = {
+            VXS_SilentAim = silentAimManualEnabled,
+            VXS_AutoShoot = autoShootEnabled,
+            MacroEnable = macroActive,
+            VXS_TriggerBot = dmvsAutoMacroState and dmvsAutoMacroState.Enabled,
+            HitboxEnable = hitboxEnabled,
+            VXS_SilentShowFOV = silentAimFOVVisible,
+            CamlockEnable = camlockEnabled,
+            KillSoundEnabled = dmvsKillSoundState and dmvsKillSoundState.Enabled,
+            DeadZoneVisible = deadZoneFrame and deadZoneFrame.Visible,
+        }
+        for flag, val in pairs(flags) do
+            if Window and Window.SetFlag then Window:SetFlag(flag, val) end
+            if WindUI and WindUI.SetFlag then WindUI:SetFlag(flag, val) end
+            if Window and type(Window.Flags) == "table" then Window.Flags[flag] = val end
+            if WindUI and type(WindUI.Flags) == "table" then WindUI.Flags[flag] = val end
+            if Window and Window.ConfigManager and Window.ConfigManager.Set then
+                Window.ConfigManager:Set(flag, val)
+            end
+        end
+    end)
+end
+
 
 local function vxsApplyState(data)
     if type(data) ~= "table" then return end
@@ -5580,27 +5723,13 @@ local function vxsApplyState(data)
             _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
         end)
     end
-    -- Sincronizar toggles del menu con estado cargado
-    pcall(function()
-        local refs = _G.VXS_CombatToggles or {}
-        local map = {
-            silent = silentAimManualEnabled,
-            auto = autoShootEnabled,
-            macro = macroActive,
-            trigger = dmvsAutoMacroState and dmvsAutoMacroState.Enabled,
-            hitbox = hitboxEnabled,
-        }
-        for k, val in pairs(map) do
-            local el = refs[k]
-            if el and type(el) == "table" then
-                pcall(function()
-                    if el.Set then el:Set(val)
-                    elseif el.SetValue then el:SetValue(val)
-                    elseif el.SetState then el:SetState(val)
-                    end
-                end)
-            end
-        end
+    -- Sincronizar toggles del menu (visual ON) + bubbles
+    pcall(vxsSyncAllToggleVisuals)
+    task.defer(function()
+        task.wait(0.15)
+        pcall(vxsSyncAllToggleVisuals)
+        task.wait(0.5)
+        pcall(vxsSyncAllToggleVisuals)
     end)
     if tg.bubbleDrag and _G.VXS_BubbleDragMode then
         pcall(function() _G.VXS_BubbleDragMode(true) end)
@@ -5627,17 +5756,49 @@ local function vxsLoadConfig()
     vxsConfigLoaded = true
 end
 
--- Cargar despues de que exista UI/logica
+-- Cargar config WindUI (igual que Vortex) + bubbles JSON
 task.defer(function()
-    task.wait(0.6)
-    vxsLoadConfig()
+    task.wait(1.2)
+    -- 1) WindUI ConfigManager: restaura Flags y visual de TODOS los toggles/sliders/dropdowns
+    pcall(function()
+        local cm = Window and Window.ConfigManager
+        if not cm then return end
+        local cfgName = "FlexusHub_DMVS"
+        local cfg
+        pcall(function()
+            if cm.CreateConfig then cfg = cm:CreateConfig(cfgName) end
+        end)
+        if not cfg then
+            pcall(function()
+                if cm.Config then cfg = cm:Config(cfgName) end
+            end)
+        end
+        if not cfg then return end
+        Window.CurrentConfig = cfg
+        pcall(function()
+            if cfg.Load then cfg:Load() end
+        end)
+        task.wait(0.25)
+        pcall(syncLoadedControlEffects)
+    end)
+    -- 2) JSON extra (posiciones bubbles + estados)
+    pcall(vxsLoadConfig)
+    task.wait(0.2)
+    pcall(function() if vxsSyncAllToggleVisuals then vxsSyncAllToggleVisuals() end end)
+    pcall(syncLoadedControlEffects)
+    vxsConfigLoaded = true
 end)
 
--- Guardar periodicamente
+-- Autoguardado WindUI + JSON
 task.spawn(function()
     while not dmvsDestroyed do
-        task.wait(4)
+        task.wait(8)
         if vxsConfigLoaded then
+            pcall(function()
+                if Window and Window.CurrentConfig and Window.CurrentConfig.Save then
+                    Window.CurrentConfig:Save()
+                end
+            end)
             pcall(vxsSaveConfig)
         end
     end
@@ -5767,6 +5928,11 @@ end)
 -- Guardar al cerrar el juego / teleport
 pcall(function()
     game:GetService("Players").LocalPlayer.OnTeleport:Connect(function()
+        pcall(function()
+            if Window and Window.CurrentConfig and Window.CurrentConfig.Save then
+                Window.CurrentConfig:Save()
+            end
+        end)
         pcall(function() if vxsSaveConfig then vxsSaveConfig() end end)
     end)
 end)
