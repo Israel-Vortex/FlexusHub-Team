@@ -2701,7 +2701,7 @@ local function dmvsKillAllAttackEnemy(targetPlayer)
     return true
 end
 
--- Kill All bloqueado (Proximamente)
+-- Kill All estado inicial OFF
 dmvsKillAllState.Enabled = false
 task.spawn(function()
     while not dmvsDestroyed do
@@ -4660,20 +4660,16 @@ keybindTab:Keybind({
 
 local killAllKB = keybindTab:Keybind({
     Title = "Kill All",
-    Desc = "Bloqueado (Proximamente)",
+    Desc = "Atajo para activar/desactivar Kill All.",
     Flag = "KillAllKB",
-    Value = "None",
-    Locked = true,
+    Value = "K",
     Callback = function(v)
-        pcall(function() if notify then notify({Title = "Kill All", Content = "Keybind bloqueado"}) end end)
+        if type(v) == "string" and v ~= "" and v ~= "None" then
+            KillAllKeybind = v
+        end
     end
 })
-pcall(function()
-    if killAllKB then
-        if killAllKB.Lock then killAllKB:Lock("Proximamente") end
-        if killAllKB.SetLocked then killAllKB:SetLocked(true) end
-    end
-end)
+-- Kill All keybind activo
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
@@ -5002,50 +4998,92 @@ combateTab:Slider({
 
 combateTab:Divider({Title = "Kill All"})
 local KillAllEnabled = false
+local KillAllKeybind = "K"
+UIElements = UIElements or {}
+
+local function applyKillAll(state)
+    KillAllEnabled = state and true or false
+    if dmvsKillAllState then dmvsKillAllState.Enabled = KillAllEnabled end
+    pcall(function()
+        if KillAllEnabled then
+            if KillAllInstance and KillAllInstance.Start then KillAllInstance:Start() end
+        else
+            if KillAllInstance and KillAllInstance.Stop then KillAllInstance:Stop() end
+        end
+    end)
+    pcall(function()
+        if _G.VXS_UpdateBubble then _G.VXS_UpdateBubble("killall", KillAllEnabled) end
+    end)
+    pcall(function()
+        if notify then notify({Title = "Kill All", Content = KillAllEnabled and "ON" or "OFF"}) end
+    end)
+end
+
 local killAllToggle = combateTab:Toggle({
     Title = "Kill All",
-    Desc = "Se acerca y ataca enemigos con cuchillo.",
+    Desc = "Fase beta: se acerca y ataca enemigos con cuchillo.",
     Flag = "VXS_KillAll",
     Value = false,
     Callback = function(value)
-        KillAllEnabled = value and true or false
-        if dmvsKillAllState then dmvsKillAllState.Enabled = KillAllEnabled end
-        pcall(function()
-            if KillAllEnabled then
-                if KillAllInstance and KillAllInstance.Start then KillAllInstance:Start() end
-            else
-                if KillAllInstance and KillAllInstance.Stop then KillAllInstance:Stop() end
-            end
-        end)
-        pcall(function()
-            if notify then notify({Title = "Kill All", Content = KillAllEnabled and "ON" or "OFF"}) end
-        end)
+        applyKillAll(value)
     end
 })
-combateTab:Toggle({
-    Title = "Kill All Jitter",
-    Desc = "Movimiento lateral al acercarse.",
-    Flag = "VXS_KillAllJitter",
-    Value = true,
-    Callback = function(v) KillAllJitterEnabled = v and true or false end
+UIElements.TogKillAll = killAllToggle
+_G.VXS_CombatToggles = _G.VXS_CombatToggles or {}
+_G.VXS_CombatToggles.killall = killAllToggle
+
+combateTab:Keybind({
+    Title = "Tecla Kill All",
+    Desc = "Atajo para activar/desactivar Kill All.",
+    Flag = "VXS_KillAllKB",
+    Value = KillAllKeybind,
+    Callback = function(k)
+        if type(k) == "string" and k ~= "" and k ~= "None" then
+            KillAllKeybind = k
+        end
+    end
 })
+
 combateTab:Slider({
-    Title = "Kill All Trigger Radius",
-    Desc = "Distancia de activacion.",
-    Flag = "VXS_KillAllRadius",
-    Value = {Min = 3, Max = 25, Default = 6},
-    Step = 0.5,
+    Title = "Jitter",
+    Desc = "Vibracion lateral al acercarse (0 = apagado).",
+    Flag = "VXS_KillAllJitterAmp",
+    Step = 0.05,
+    Value = { Min = 0.0, Max = 3.0, Default = 0.8 },
     Callback = function(v)
-        KillAllTriggerRadius = v
-        pcall(function()
-            if KILLALL_TRIGGER_RADIUS then end
-        end)
-        -- actualizar constante runtime
-        pcall(function()
-            getfenv()["KILLALL_TRIGGER_RADIUS"] = v
-        end)
+        KILLALL_JITTER_AMPLITUDE = v
+        KillAllJitterEnabled = (v or 0) > 0.01
     end
 })
+
+combateTab:Slider({
+    Title = "Radio de activacion",
+    Desc = "Distancia a la que se activa el ataque.",
+    Flag = "VXS_KillAllRadius",
+    Step = 0.5,
+    Value = { Min = 2.75, Max = 9.0, Default = 6.0 },
+    Callback = function(v)
+        KILLALL_TRIGGER_RADIUS = v
+        KillAllTriggerRadius = v
+    end
+})
+
+-- Keybind listener
+pcall(function()
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        local keyName = KillAllKeybind
+        if not keyName or keyName == "" or keyName == "None" then return end
+        local ok, code = pcall(function() return Enum.KeyCode[keyName] end)
+        if ok and code and input.KeyCode == code then
+            local newState = not KillAllEnabled
+            applyKillAll(newState)
+            pcall(function()
+                if killAllToggle and killAllToggle.Set then killAllToggle:Set(newState) end
+            end)
+        end
+    end)
+end)
 
 -- ---------- Bubbles ----------
 
@@ -5140,31 +5178,16 @@ bubblesTab:Toggle({
 })
 local kaBubbleToggle = bubblesTab:Toggle({
     Title = "Bubble Kill All",
-    Desc = "Proximamente — bloqueado.",
+    Desc = "Mostrar u ocultar la bubble de Kill All.",
     Flag = "VXS_BubbleShowKillAll",
-    Value = false,
-    Locked = true,
+    Value = true,
     Callback = function(v)
-        -- Bloqueado: no muestra/activa
-        pcall(function() if _G.VXS_BubbleShow then _G.VXS_BubbleShow("killall", false) end end)
-        task.defer(function()
-            pcall(function()
-                if kaBubbleToggle then
-                    if kaBubbleToggle.Set then kaBubbleToggle:Set(false) end
-                    if kaBubbleToggle.Lock then kaBubbleToggle:Lock("Proximamente") end
-                    if kaBubbleToggle.SetLocked then kaBubbleToggle:SetLocked(true) end
-                end
-            end)
+        pcall(function()
+            if _G.VXS_BubbleShow then _G.VXS_BubbleShow("killall", v and true or false) end
         end)
-        pcall(function() if notify then notify({Title = "Kill All", Content = "Bloqueado (Proximamente)"}) end end)
     end
 })
-pcall(function()
-    if kaBubbleToggle then
-        if kaBubbleToggle.Lock then kaBubbleToggle:Lock("Proximamente") end
-        if kaBubbleToggle.SetLocked then kaBubbleToggle:SetLocked(true) end
-    end
-end)
+
 
 -- Crear bubbles gris/blanco
 task.spawn(function()
@@ -5208,6 +5231,7 @@ task.spawn(function()
     local function setState(key, value)
         if key == "killall" then
             local on = value and true or false
+            KillAllEnabled = on
             if dmvsKillAllState then dmvsKillAllState.Enabled = on end
             pcall(function()
                 if on then
@@ -5216,8 +5240,11 @@ task.spawn(function()
                     if KillAllInstance and KillAllInstance.Stop then KillAllInstance:Stop() end
                 end
             end)
+            pcall(function()
+                local tog = (_G.VXS_CombatToggles and _G.VXS_CombatToggles.killall) or (UIElements and UIElements.TogKillAll)
+                if tog and tog.Set then tog:Set(on) end
+            end)
             pcall(function() if notify then notify({Title = "Kill All", Content = on and "ON" or "OFF"}) end end)
-            pcall(function() if _G.VXS_ScheduleSave then _G.VXS_ScheduleSave() end end)
             return
         end
         if key == "silent" then
@@ -7214,6 +7241,7 @@ vxsIsLoadingConfig = false
         { Name = "Cancion 11", Id = "128048502331483" },
         { Name = "Cancion 12", Id = "135321902579514" },
         { Name = "Cancion 13", Id = "131465489873214" },
+        { Name = "Cancion 14", Id = "6537242620" },
     }
 
     local CurrentIndex = 1
