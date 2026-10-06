@@ -3065,49 +3065,8 @@ local Window = WindUI:CreateWindow({
 Window:SetIconSize(30)
 
 local function syncLoadedControlEffects()
-    if type(Window.ListFlags) ~= "function" then
-        return
-    end
-
-    local saved = {}
-    pcall(function()
-        if Window.ConfigManager and type(Window.ConfigManager.GetAll) == "function" then
-            saved = Window.ConfigManager:GetAll() or {}
-        end
-    end)
-
-    for _, flag in ipairs(Window:ListFlags()) do
-        local element = nil
-        pcall(function()
-            if Window.GetFlagElement then element = Window:GetFlagElement(flag) end
-        end)
-        local value = nil
-        pcall(function()
-            if Window.GetFlag then value = Window:GetFlag(flag) end
-        end)
-        if value == nil and saved[flag] ~= nil then
-            value = saved[flag]
-        end
-        if element and value ~= nil then
-            local elementType = element.__type
-            -- Forzar visual del control
-            pcall(function()
-                if element.Set then element:Set(value)
-                elseif element.SetValue then element:SetValue(value)
-                elseif element.SetState then element:SetState(value)
-                end
-            end)
-            -- Disparar callback para aplicar logica + bubbles
-            if type(element.Callback) == "function" then
-                if elementType == "Keybind" or elementType == "ToggleKeybind" then
-                    pcall(element.Callback, element.Value)
-                else
-                    pcall(element.Callback, value)
-                end
-            end
-        end
-    end
-    -- bubbles segun estado real
+    -- Solo refrescar bubbles (cfg:Load ya aplico Flags/visual)
+    -- NO recorrer todos los flags ni re-disparar callbacks (congela el cliente)
     pcall(function()
         if _G.VXS_UpdateBubble then
             _G.VXS_UpdateBubble("silent", silentAimManualEnabled)
@@ -4107,12 +4066,7 @@ task.spawn(function()
                     Window.CurrentConfig:Set(flag, value)
                 end
             end)
-            -- Guardar ya (WindUI + JSON)
-            pcall(function()
-                if Window and Window.CurrentConfig and Window.CurrentConfig.Save then
-                    task.defer(function() pcall(function() Window.CurrentConfig:Save() end) end)
-                end
-            end)
+
         end)
         pcall(function()
             if notify then notify({Title = key, Content = value and "ON" or "OFF"}) end
@@ -4242,17 +4196,15 @@ task.spawn(function()
         local btn = bubbles[key]
         if btn then styleBtn(btn, value and true or false) end
     end
-    -- re-aplicar estados y visual de toggles (config puede haber cargado antes)
     task.defer(function()
-        task.wait(0.2)
+        task.wait(0.3)
         pcall(function()
-            if vxsSyncAllToggleVisuals then vxsSyncAllToggleVisuals() end
+            if bubbles.silent then styleBtn(bubbles.silent, getState("silent")) end
+            if bubbles.auto then styleBtn(bubbles.auto, getState("auto")) end
+            if bubbles.macro then styleBtn(bubbles.macro, getState("macro")) end
+            if bubbles.trigger then styleBtn(bubbles.trigger, getState("trigger")) end
+            if bubbles.hitbox then styleBtn(bubbles.hitbox, getState("hitbox")) end
         end)
-        styleBtn(bubbles.silent, getState("silent"))
-        styleBtn(bubbles.auto, getState("auto"))
-        styleBtn(bubbles.macro, getState("macro"))
-        styleBtn(bubbles.trigger, getState("trigger"))
-        styleBtn(bubbles.hitbox, getState("hitbox"))
     end)
 end)
 
@@ -5414,6 +5366,7 @@ local VXS_CONFIG_FILE = VXS_CONFIG_FOLDER .. "/autosave.json"
 local vxsSaveBusy = false
 local vxsSaveQueued = false
 local vxsConfigLoaded = false
+local vxsIsLoadingConfig = false
 
 local function vxsEnsureFolder()
     if isfolder and not isfolder(VXS_CONFIG_FOLDER) then
@@ -5524,18 +5477,19 @@ local function vxsSaveConfig()
 end
 
 _G.VXS_ScheduleSave = function()
-    if not vxsConfigLoaded then return end
+    if not vxsConfigLoaded or vxsIsLoadingConfig then return end
     if vxsSaveBusy then
         vxsSaveQueued = true
         return
     end
-    task.delay(0.35, function()
+    task.delay(0.5, function()
+        if vxsIsLoadingConfig then return end
         pcall(function()
             if Window and Window.CurrentConfig and Window.CurrentConfig.Save then
                 Window.CurrentConfig:Save()
             end
         end)
-        vxsSaveConfig()
+        pcall(vxsSaveConfig)
     end)
 end
 
@@ -5723,13 +5677,15 @@ local function vxsApplyState(data)
             _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
         end)
     end
-    -- Sincronizar toggles del menu (visual ON) + bubbles
-    pcall(vxsSyncAllToggleVisuals)
-    task.defer(function()
-        task.wait(0.15)
-        pcall(vxsSyncAllToggleVisuals)
-        task.wait(0.5)
-        pcall(vxsSyncAllToggleVisuals)
+    -- Solo bubbles (no re-Set de todos los toggles: congela)
+    pcall(function()
+        if _G.VXS_UpdateBubble then
+            _G.VXS_UpdateBubble("silent", silentAimManualEnabled)
+            _G.VXS_UpdateBubble("auto", autoShootEnabled)
+            _G.VXS_UpdateBubble("macro", macroActive)
+            _G.VXS_UpdateBubble("trigger", dmvsAutoMacroState and dmvsAutoMacroState.Enabled)
+            _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
+        end
     end)
     if tg.bubbleDrag and _G.VXS_BubbleDragMode then
         pcall(function() _G.VXS_BubbleDragMode(true) end)
@@ -5756,10 +5712,19 @@ local function vxsLoadConfig()
     vxsConfigLoaded = true
 end
 
--- Cargar config WindUI (igual que Vortex) + bubbles JSON
+-- Cargar config (suave, sin freeze)
 task.defer(function()
-    task.wait(1.2)
-    -- 1) WindUI ConfigManager: restaura Flags y visual de TODOS los toggles/sliders/dropdowns
+    vxsIsLoadingConfig = true
+    task.wait(2.0)
+
+    -- Solo JSON propio (ligero). ConfigManager:Load a veces congela en mobile.
+    pcall(function()
+        if vxsLoadConfig then vxsLoadConfig() end
+    end)
+    task.wait(0.15)
+    pcall(syncLoadedControlEffects)
+
+    -- Crear CurrentConfig solo para GUARDAR (no Load automatico)
     pcall(function()
         local cm = Window and Window.ConfigManager
         if not cm then return end
@@ -5773,33 +5738,50 @@ task.defer(function()
                 if cm.Config then cfg = cm:Config(cfgName) end
             end)
         end
-        if not cfg then return end
-        Window.CurrentConfig = cfg
-        pcall(function()
-            if cfg.Load then cfg:Load() end
-        end)
-        task.wait(0.25)
-        pcall(syncLoadedControlEffects)
+        if cfg then
+            Window.CurrentConfig = cfg
+        end
     end)
-    -- 2) JSON extra (posiciones bubbles + estados)
-    pcall(vxsLoadConfig)
-    task.wait(0.2)
-    pcall(function() if vxsSyncAllToggleVisuals then vxsSyncAllToggleVisuals() end end)
-    pcall(syncLoadedControlEffects)
+
+    -- Visual de toggles combate (pocos, no todos los flags)
+    pcall(function()
+        local refs = _G.VXS_CombatToggles or {}
+        local map = {
+            silent = silentAimManualEnabled,
+            auto = autoShootEnabled,
+            macro = macroActive,
+            trigger = dmvsAutoMacroState and dmvsAutoMacroState.Enabled,
+            hitbox = hitboxEnabled,
+        }
+        for k, val in pairs(map) do
+            local el = refs[k]
+            if type(el) == "table" then
+                pcall(function()
+                    if el.Set then el:Set(val)
+                    elseif el.SetValue then el:SetValue(val)
+                    end
+                end)
+            end
+        end
+    end)
+
+    vxsIsLoadingConfig = false
     vxsConfigLoaded = true
 end)
 
--- Autoguardado WindUI + JSON
+-- Autoguardado (cada 12s, nunca durante load)
 task.spawn(function()
     while not dmvsDestroyed do
-        task.wait(8)
-        if vxsConfigLoaded then
+        task.wait(12)
+        if vxsConfigLoaded and not vxsIsLoadingConfig then
             pcall(function()
                 if Window and Window.CurrentConfig and Window.CurrentConfig.Save then
                     Window.CurrentConfig:Save()
                 end
             end)
-            pcall(vxsSaveConfig)
+            pcall(function()
+                if vxsSaveConfig then vxsSaveConfig() end
+            end)
         end
     end
 end)
