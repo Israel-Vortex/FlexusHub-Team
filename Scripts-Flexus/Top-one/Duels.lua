@@ -932,6 +932,1198 @@ local function isLobbyTeamName(name)
         or n:find("wait", 1, true) or n:find("espectador", 1, true)
 end
 
+
+-- ConnectionManager + helpers KillAll
+local ConnectionManager = {}
+ConnectionManager.__index = ConnectionManager
+function ConnectionManager.new() return setmetatable({ Items = {} }, ConnectionManager) end
+function ConnectionManager:Add(task) self.Items[#self.Items + 1] = task; return task end
+function ConnectionManager:Cleanup()
+    for i = #self.Items, 1, -1 do
+        local item = self.Items[i]
+        self.Items[i] = nil
+        local ty = typeof(item)
+        if ty == "RBXScriptConnection" then pcall(function() item:Disconnect() end)
+        elseif ty == "Instance" then pcall(function() item:Destroy() end)
+        elseif ty == "function" then pcall(item) end
+    end
+end
+
+local function estaEnLobby()
+    local ok, team = pcall(function() return player.Team and player.Team.Name end)
+    if ok and team then
+        local n = string.lower(tostring(team))
+        if n:find("lobby") or n:find("menu") or n:find("spect") then return true end
+    end
+    return false
+end
+
+local function IsInMatchStrict()
+    if estaEnLobby() then return false end
+    local ok, g = pcall(function() return player:GetAttribute("Game") end)
+    if ok and g ~= nil then return true end
+    return not estaEnLobby()
+end
+
+local KillAllJitterEnabled = true
+local KillAllTriggerRadius = 200
+
+local KILLALL_MOVE_SPEED               = 39.9
+local KILLALL_APPROACH_DISTANCE        = 2.5
+local KILLALL_APPROACH_TOLERANCE       = 0.35
+local KILLALL_SWING_INTERVAL           = 0.5
+local KILLALL_SAFE_GROUND_THRESHOLD    = 3
+local KILLALL_STICK_MAX_TIME           = 2.5
+local KILLALL_STICK_MAX_DISTANCE       = 20
+local KILLALL_VOID_PROTECTION          = 15
+local KILLALL_HEALTH_STALL_TIME        = 1.5
+local KILLALL_TARGET_GRACE_TIME        = 1.2
+local KILLALL_PITCH_DEGREES            = 90
+local KILLALL_HEIGHT_OFFSET            = 1.9
+local KILLALL_HIDE_DEPTH               = 4
+local KILLALL_HIDE_DURATION            = 0.5
+local KILLALL_KNIFE_RANGE_Y            = 4.5
+local KILLALL_PREDICTION_TIME          = 0.08
+local KILLALL_JITTER_AMPLITUDE         = 0.8
+local KILLALL_JITTER_SWITCH_MIN        = 0.05
+local KILLALL_JITTER_SWITCH_MAX        = 0.12
+local KILLALL_JITTER_LERP_SPEED        = 25
+local KILLALL_UNDERGROUND_DEPTH        = 5
+local KILLALL_UNDERGROUND_TOLERANCE    = 1.5
+local KILLALL_TRIGGER_RADIUS           = 6.0
+local KILLALL_VALIDATION_TOLERANCE     = 1.0
+local KILLALL_VALIDATION_FRAMES        = 3
+local KILLALL_KNIFE_RANGE_Y            = 4.5
+local KILLALL_PREDICTION_TIME          = 0.08
+
+local KILLALL_JITTER_AMPLITUDE         = 0.8
+local KILLALL_JITTER_SWITCH_MIN        = 0.05
+local KILLALL_JITTER_SWITCH_MAX        = 0.12
+local KILLALL_JITTER_LERP_SPEED        = 25
+
+local KILLALL_UNDERGROUND_DEPTH        = 5
+local KILLALL_UNDERGROUND_TOLERANCE    = 1.5
+
+local KILLALL_TRIGGER_RADIUS           = 6.0
+local KILLALL_VALIDATION_TOLERANCE     = 1.0
+local KILLALL_VALIDATION_FRAMES        = 3
+
+local function esEnemigoValido(plr)
+    local ok, r = pcall(isEnemy, plr)
+    return ok and r
+end
+
+local KillAll = {}
+KillAll.__index = KillAll
+
+function KillAll.new()
+    return setmetatable({
+        running = false,
+        connections = ConnectionManager.new(),
+        savedCollisions = {},
+        swingAccumulator = 0,
+        safePosition = nil,
+        sticking = false,
+        stickingStartTime = 0,
+        lastEnemyHealth = nil,
+        lastHealthChangeTime = 0,
+        lastTargetSeenTime = 0,
+        currentTarget = nil,
+        lockedTargetPlayer = nil,
+        lastStickTarget = nil,
+        lastStickTargetHum = nil,
+        hiding = false,
+        hidingUntil = 0,
+        targetFloor = nil,
+        targetFloorY = nil,
+        lastFloorTarget = nil,
+        inKnifeRangeNow = false,
+        forceDescent = false,
+        jitterSide = 1,
+        jitterCurrent = 0,
+        jitterNextSwitch = 0,
+        lastSetCFrame = nil,
+        validFrames = 0,
+        killActivated = false,
+    }, KillAll)
+end
+
+function KillAll:DisableCollisions()
+    local char = player.Character
+    if not char then return end
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part.CanCollide then
+            if self.savedCollisions[part] == nil then
+                self.savedCollisions[part] = part.CanCollide
+            end
+            part.CanCollide = false
+        end
+    end
+end
+
+function KillAll:RestoreCollisions()
+    for part, value in pairs(self.savedCollisions) do
+        if part.Parent then
+            pcall(function() part.CanCollide = value end)
+        end
+    end
+    table.clear(self.savedCollisions)
+end
+
+function KillAll:GetRoot(p)
+    local char = p and p.Character
+    if not char then return nil end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if root and root:IsA("BasePart") then return root end
+    return nil
+end
+
+function KillAll:GetHumanoid(p)
+    local char = p and p.Character
+    return char and char:FindFirstChildOfClass("Humanoid") or nil
+end
+
+function KillAll:GetFloorY(targetRoot)
+    local hum = targetRoot.Parent and targetRoot.Parent:FindFirstChildOfClass("Humanoid")
+    local hip = hum and tonumber(hum.HipHeight) or 2
+    return targetRoot.Position.Y - hip - targetRoot.Size.Y / 2
+end
+
+function KillAll:GetPlatformFloorY(targetRoot)
+    if not targetRoot then return nil end
+    if self.lastFloorTarget == targetRoot and self.targetFloorY then
+        return self.targetFloorY
+    end
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = { player.Character, targetRoot.Parent }
+    local origin = targetRoot.Position + Vector3.new(0, 3, 0)
+    local result = workspace:Raycast(origin, Vector3.new(0, -500, 0), params)
+    if result then
+        self.targetFloorY = result.Position.Y
+        self.lastFloorTarget = targetRoot
+        return self.targetFloorY
+    end
+    self.targetFloorY = self:GetFloorY(targetRoot)
+    self.lastFloorTarget = targetRoot
+    return self.targetFloorY
+end
+
+function KillAll:IsInKnifeRange(myRoot, targetRoot)
+    if not myRoot or not targetRoot then return false end
+    local delta = targetRoot.Position - myRoot.Position
+    local horizontal = Vector3.new(delta.X, 0, delta.Z).Magnitude
+    local vertical = math.abs(delta.Y)
+    return horizontal <= (KILLALL_APPROACH_DISTANCE + KILLALL_APPROACH_TOLERANCE) and vertical <= KILLALL_KNIFE_RANGE_Y
+end
+
+function KillAll:IsLockedTargetValid()
+    local lp = self.lockedTargetPlayer
+    if not lp then return false end
+    if not lp.Parent then return false end
+    if not esEnemigoValido(lp) then return false end
+    local char = lp.Character
+    if not char then return false end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not root or not hum then return false end
+    if hum.Health <= 0 then return false end
+    return root
+end
+
+function KillAll:GetPredictedPos(targetRoot)
+    local vel = Vector3.zero
+    if targetRoot:IsA("BasePart") then
+        vel = targetRoot.AssemblyLinearVelocity
+    end
+    vel = Vector3.new(vel.X, 0, vel.Z)
+    return targetRoot.Position + vel * KILLALL_PREDICTION_TIME
+end
+
+function KillAll:GetClosestEnemy()
+    local myRoot = self:GetRoot(player)
+    if not myRoot then return nil end
+
+    local lockedRoot = self:IsLockedTargetValid()
+    if lockedRoot then
+        return lockedRoot
+    end
+
+    self.lockedTargetPlayer = nil
+    self.currentTarget = nil
+
+    local best, bestDist, bestPlayer = nil, nil, nil
+    for _, other in ipairs(Players:GetPlayers()) do
+        if other ~= player and esEnemigoValido(other) then
+            local hum = self:GetHumanoid(other)
+            local root = self:GetRoot(other)
+            if root and hum and hum.Health > 0 then
+                local dist = (root.Position - myRoot.Position).Magnitude
+                if not bestDist or dist < bestDist then
+                    best, bestDist, bestPlayer = root, dist, other
+                end
+            end
+        end
+    end
+
+    if bestPlayer then
+        self.lockedTargetPlayer = bestPlayer
+    end
+
+    return best
+end
+
+function KillAll:IsInMatch()
+    return IsInMatchStrict()
+end
+
+function KillAll:ResetState()
+    self.sticking = false
+    self.stickingStartTime = 0
+    self.lastEnemyHealth = nil
+    self.lastHealthChangeTime = 0
+    self.targetFloor = nil
+    self.inKnifeRangeNow = false
+    self.forceDescent = false
+    self.jitterSide = 1
+    self.jitterCurrent = 0
+    self.jitterNextSwitch = 0
+    self.lastSetCFrame = nil
+    self.validFrames = 0
+    self.killActivated = false
+    self:RestoreCollisions()
+    local hum = self:GetHumanoid(player)
+    if hum and hum.PlatformStand then
+        pcall(function() hum.PlatformStand = false end)
+    end
+end
+
+function KillAll:ReturnToSafePosition(myRoot)
+    if not self.safePosition or not myRoot then return end
+    local currentY = myRoot.Position.Y
+    if currentY < (self.safePosition.Y - KILLALL_SAFE_GROUND_THRESHOLD) then
+        pcall(function()
+            myRoot.CFrame = CFrame.new(self.safePosition)
+            myRoot.AssemblyLinearVelocity  = Vector3.zero
+            myRoot.AssemblyAngularVelocity = Vector3.zero
+        end)
+    end
+end
+
+function KillAll:ForceReturnToSafe(myRoot)
+    if not self.safePosition or not myRoot then return end
+    pcall(function()
+        myRoot.CFrame = CFrame.new(self.safePosition)
+        myRoot.AssemblyLinearVelocity  = Vector3.zero
+        myRoot.AssemblyAngularVelocity = Vector3.zero
+    end)
+end
+
+function KillAll:IsFallingIntoVoid(myRoot)
+    if not self.safePosition or not myRoot then return false end
+    return myRoot.Position.Y < (self.safePosition.Y - KILLALL_VOID_PROTECTION)
+end
+
+function KillAll:HideBelowMap()
+    local myRoot = self:GetRoot(player)
+    if not myRoot then return end
+    local baseY = self.safePosition and self.safePosition.Y or myRoot.Position.Y
+    local hideY = baseY - KILLALL_HIDE_DEPTH
+    local currentX, currentZ = myRoot.Position.X, myRoot.Position.Z
+    pcall(function()
+        myRoot.CFrame = CFrame.new(currentX, hideY, currentZ)
+        myRoot.AssemblyLinearVelocity  = Vector3.zero
+        myRoot.AssemblyAngularVelocity = Vector3.zero
+    end)
+    self.hiding = true
+    self.hidingUntil = os.clock() + KILLALL_HIDE_DURATION
+end
+
+function KillAll:IsKnife(tool)
+    if not (tool and tool:IsA("Tool")) then return false end
+    if tool:FindFirstChild("fire") or tool:FindFirstChild("showBeam") then return false end
+    return tool:FindFirstChild("Slash") ~= nil or tool:FindFirstChild("SlashStart") ~= nil
+end
+
+function KillAll:FindKnife()
+    local char = player.Character
+    if char then
+        for _, child in ipairs(char:GetChildren()) do
+            if self:IsKnife(child) then return child, true end
+        end
+    end
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    if backpack then
+        for _, child in ipairs(backpack:GetChildren()) do
+            if self:IsKnife(child) then return child, false end
+        end
+    end
+    return nil, false
+end
+
+function KillAll:SwingKnife(dt)
+    self.swingAccumulator = self.swingAccumulator + dt
+    if self.swingAccumulator < KILLALL_SWING_INTERVAL then return end
+    self.swingAccumulator = 0
+
+    local tool, equipped = self:FindKnife()
+    if not tool then return end
+
+    if not equipped then
+        local hum = self:GetHumanoid(player)
+        if not hum then return end
+        pcall(function() hum:EquipTool(tool) end)
+        if tool.Parent ~= player.Character then return end
+    end
+    pcall(function() tool:Activate() end)
+end
+
+function KillAll:UpdateJitter(dt)
+    local now = os.clock()
+    if now >= self.jitterNextSwitch then
+        self.jitterSide = (math.random() < 0.5) and 1 or -1
+        self.jitterNextSwitch = now + KILLALL_JITTER_SWITCH_MIN + math.random() * (KILLALL_JITTER_SWITCH_MAX - KILLALL_JITTER_SWITCH_MIN)
+    end
+    local targetOffset = self.jitterSide * KILLALL_JITTER_AMPLITUDE
+    self.jitterCurrent = self.jitterCurrent + (targetOffset - self.jitterCurrent) * math.clamp(dt * KILLALL_JITTER_LERP_SPEED, 0, 1)
+end
+
+function KillAll:CheckServerValidation(myRoot)
+    if self.killActivated then return true end
+    if not self.lastSetCFrame then return false end
+    local desiredPos = self.lastSetCFrame.Position
+    local actualPos = myRoot.Position
+    local diff = (actualPos - desiredPos).Magnitude
+
+    if diff <= KILLALL_VALIDATION_TOLERANCE then
+        self.validFrames = self.validFrames + 1
+        if self.validFrames >= KILLALL_VALIDATION_FRAMES then
+            self.killActivated = true
+            self.swingAccumulator = KILLALL_SWING_INTERVAL
+            return true
+        end
+    else
+        self.validFrames = 0
+    end
+    return false
+end
+
+function KillAll:ForceUnderground(myRoot, targetRoot)
+    if not myRoot or not targetRoot then return end
+    local floorY = self:GetPlatformFloorY(targetRoot)
+    if not floorY then return end
+    local targetY = floorY - KILLALL_UNDERGROUND_DEPTH
+    if myRoot.Position.Y > targetY + KILLALL_UNDERGROUND_TOLERANCE then
+        pcall(function()
+            myRoot.CFrame = CFrame.new(myRoot.Position.X, targetY, myRoot.Position.Z)
+            myRoot.AssemblyLinearVelocity  = Vector3.zero
+            myRoot.AssemblyAngularVelocity = Vector3.zero
+        end)
+    end
+end
+
+function KillAll:ApproachTarget(myRoot, targetRoot, dt)
+    dt = dt or 0
+    local myPos = myRoot.Position
+    local targetPos = targetRoot.Position
+
+    local deltaXZ = Vector3.new(targetPos.X - myPos.X, 0, targetPos.Z - myPos.Z)
+    local hDist = deltaXZ.Magnitude
+
+    if hDist <= KILLALL_TRIGGER_RADIUS then
+        if not self.sticking then
+            local lookTarget = Vector3.new(targetPos.X, myPos.Y, targetPos.Z)
+            local targetCF = CFrame.lookAt(myPos, lookTarget)
+            self.lastSetCFrame = targetCF
+            pcall(function()
+                myRoot.CFrame = targetCF
+                myRoot.AssemblyLinearVelocity = Vector3.zero
+                myRoot.AssemblyAngularVelocity = Vector3.zero
+            end)
+
+            if self:CheckServerValidation(myRoot) then
+                self.sticking = true
+                self.stickingStartTime = os.clock()
+                self.lastStickTarget = targetRoot
+                self.targetFloor = nil
+                self.forceDescent = true
+                local hum = self:GetHumanoid(targetRoot.Parent)
+                self.lastEnemyHealth = hum and hum.Health or nil
+                self.lastHealthChangeTime = os.clock()
+                self.lastStickTargetHum = hum
+                self.jitterCurrent = 0
+            end
+        end
+        return
+    end
+
+    self.lastSetCFrame = nil
+    self.validFrames = 0
+
+    local dir = deltaXZ.Unit
+    local perp = Vector3.new(-dir.Z, 0, dir.X)
+
+    self:UpdateJitter(dt)
+
+    local step = KILLALL_MOVE_SPEED * dt
+    local travel = math.min(step, math.max(0, hDist - KILLALL_TRIGGER_RADIUS))
+
+    local maxJitterByDistance = math.sqrt(math.max(0, travel * (2 * hDist - travel))) * 0.85
+    local jitterFactor = math.clamp((hDist - KILLALL_TRIGGER_RADIUS) / 8, 0, 1)
+    local desiredJitter = self.jitterCurrent * jitterFactor
+    local actualJitter = math.clamp(desiredJitter, -maxJitterByDistance, maxJitterByDistance)
+
+    local baseX = myPos.X + dir.X * travel
+    local baseZ = myPos.Z + dir.Z * travel
+    local newX = baseX + perp.X * actualJitter
+    local newZ = baseZ + perp.Z * actualJitter
+
+    local floorY = self:GetPlatformFloorY(targetRoot)
+    local newY
+    if floorY then
+        newY = floorY - KILLALL_UNDERGROUND_DEPTH
+    else
+        newY = myPos.Y
+    end
+
+    local newPos = Vector3.new(newX, newY, newZ)
+    local lookTarget = Vector3.new(targetPos.X, newPos.Y, targetPos.Z)
+    local newCFrame = CFrame.lookAt(newPos, lookTarget)
+
+    pcall(function()
+        myRoot.CFrame = newCFrame
+        myRoot.AssemblyLinearVelocity = Vector3.zero
+        myRoot.AssemblyAngularVelocity = Vector3.zero
+    end)
+end
+
+function KillAll:CanStickToTarget(myRoot, targetRoot)
+    if not targetRoot or not targetRoot.Parent then return false end
+
+    local targetPlayer = Players:GetPlayerFromCharacter(targetRoot.Parent)
+    if not targetPlayer or not esEnemigoValido(targetPlayer) then return false end
+
+    local targetHum = targetRoot.Parent:FindFirstChildOfClass("Humanoid")
+    if not targetHum or targetHum.Health <= 0 then return false end
+
+    local distHorizontal = (Vector3.new(myRoot.Position.X, 0, myRoot.Position.Z) - Vector3.new(targetRoot.Position.X, 0, targetRoot.Position.Z)).Magnitude
+    if distHorizontal > KILLALL_STICK_MAX_DISTANCE then return false end
+
+    return true
+end
+
+function KillAll:StickToTarget(myRoot, targetRoot)
+    local targetPos = targetRoot.Position
+    local targetHum = targetRoot.Parent and targetRoot.Parent:FindFirstChildOfClass("Humanoid")
+    local onGround  = targetHum and targetHum.FloorMaterial ~= Enum.Material.Air
+
+    if targetRoot ~= self.lastStickTarget then
+        self.lastStickTarget = targetRoot
+        self.targetFloor     = nil
+    end
+
+    if onGround or not self.targetFloor then
+        self.targetFloor = self:GetFloorY(targetRoot)
+    end
+
+    local myPos = myRoot.Position
+    local dir = Vector3.new(myPos.X - targetPos.X, 0, myPos.Z - targetPos.Z)
+    if dir.Magnitude < 0.05 then
+        dir = Vector3.new(0, 0, 1)
+    else
+        dir = dir.Unit
+    end
+
+    local x = targetPos.X + dir.X * KILLALL_APPROACH_DISTANCE
+    local z = targetPos.Z + dir.Z * KILLALL_APPROACH_DISTANCE
+
+    local inRange = self:IsInKnifeRange(myRoot, targetRoot)
+    local y
+    if inRange and not self.forceDescent then
+        y = myPos.Y
+    else
+        y = self.targetFloor - KILLALL_HEIGHT_OFFSET
+        if inRange then
+            self.forceDescent = false
+        end
+    end
+
+    pcall(function()
+        myRoot.CFrame = CFrame.new(x, y, z) * CFrame.Angles(math.rad(KILLALL_PITCH_DEGREES), 0, 0)
+        myRoot.AssemblyLinearVelocity  = Vector3.zero
+        myRoot.AssemblyAngularVelocity = Vector3.zero
+    end)
+end
+
+function KillAll:CheckEnemyHealth(targetRoot)
+    local targetHum = targetRoot.Parent and targetRoot.Parent:FindFirstChildOfClass("Humanoid")
+    if not targetHum then return false end
+
+    local currentHealth = targetHum.Health
+
+    if self.lastEnemyHealth == nil then
+        self.lastEnemyHealth = currentHealth
+        self.lastHealthChangeTime = os.clock()
+        return false
+    end
+
+    if currentHealth < self.lastEnemyHealth then
+        self.lastEnemyHealth = currentHealth
+        self.lastHealthChangeTime = os.clock()
+        return false
+    end
+
+    if (os.clock() - self.lastHealthChangeTime) >= KILLALL_HEALTH_STALL_TIME then
+        return true
+    end
+
+    return false
+end
+
+function KillAll:Update(dt)
+    if not self:IsInMatch() then
+        self:ResetState()
+        self.currentTarget = nil
+        self.lockedTargetPlayer = nil
+        self.lastStickTarget = nil
+        self.lastFloorTarget = nil
+        self.targetFloorY = nil
+        return
+    end
+
+    local myRoot = self:GetRoot(player)
+    if not myRoot then
+        self:ResetState()
+        self.currentTarget = nil
+        self.lockedTargetPlayer = nil
+        return
+    end
+
+    if self.lastStickTargetHum then
+        local hum = self.lastStickTargetHum
+        if not hum.Parent or hum.Health <= 0 then
+            self:HideBelowMap()
+            self.inKnifeRangeNow      = false
+            self.forceDescent         = false
+            self.lastStickTargetHum   = nil
+            self.lastStickTarget      = nil
+            self.sticking             = false
+            self.stickingStartTime    = 0
+            self.lastEnemyHealth      = nil
+            self.lastHealthChangeTime = 0
+            self.targetFloor          = nil
+            self.killActivated        = false
+            self.validFrames          = 0
+            self.lastSetCFrame        = nil
+            return
+        end
+    end
+
+    if self.hiding then
+        if os.clock() >= self.hidingUntil then
+            self.hiding = false
+        else
+            pcall(function()
+                myRoot.AssemblyLinearVelocity  = Vector3.zero
+                myRoot.AssemblyAngularVelocity = Vector3.zero
+            end)
+            return
+        end
+    end
+
+    if self:IsFallingIntoVoid(myRoot) then
+        self:ForceReturnToSafe(myRoot)
+        self:ResetState()
+        self.currentTarget = nil
+        self.lockedTargetPlayer = nil
+        self.lastStickTarget = nil
+        local hum = self:GetHumanoid(player)
+        if hum then
+            pcall(function() hum.PlatformStand = false end)
+        end
+        return
+    end
+
+    local target = self:GetClosestEnemy()
+
+    if target then
+        self.currentTarget      = target
+        self.lastTargetSeenTime = os.clock()
+    end
+
+    if not target then
+        local justLostTarget = (os.clock() - (self.lastTargetSeenTime or 0)) < KILLALL_TARGET_GRACE_TIME
+        local isUnderground  = self.safePosition and myRoot.Position.Y < (self.safePosition.Y - 2)
+
+        if justLostTarget and isUnderground then
+            pcall(function()
+                myRoot.AssemblyLinearVelocity  = Vector3.zero
+                myRoot.AssemblyAngularVelocity = Vector3.zero
+            end)
+            return
+        end
+
+        self:ReturnToSafePosition(myRoot)
+        self:ResetState()
+        self.currentTarget = nil
+        self.lockedTargetPlayer = nil
+        self.lastStickTarget = nil
+        self.lastFloorTarget = nil
+        self.targetFloorY = nil
+        if self.safePosition then
+            local hum = self:GetHumanoid(player)
+            if hum then
+                pcall(function() hum.PlatformStand = false end)
+            end
+        end
+        return
+    end
+
+    self:DisableCollisions()
+
+    if self.lastStickTarget then
+        local inRange = self:IsInKnifeRange(myRoot, self.lastStickTarget)
+        if inRange and not self.inKnifeRangeNow then
+            self.swingAccumulator = KILLALL_SWING_INTERVAL
+            self.inKnifeRangeNow = true
+        elseif not inRange then
+            self.inKnifeRangeNow = false
+        end
+    end
+
+    self:SwingKnife(dt or 0)
+
+    local hum = self:GetHumanoid(player)
+    if hum and not hum.PlatformStand then
+        pcall(function() hum.PlatformStand = true end)
+    end
+
+    if self.safePosition and myRoot.Position.Y >= (self.safePosition.Y - KILLALL_SAFE_GROUND_THRESHOLD) then
+        self.safePosition = Vector3.new(myRoot.Position.X, self.safePosition.Y, myRoot.Position.Z)
+    end
+
+    if not self.sticking then
+        self:ForceUnderground(myRoot, target)
+    end
+
+    if self.sticking then
+        local lostTarget  = (target ~= self.lastStickTarget)
+        local timedOut    = (os.clock() - self.stickingStartTime) > KILLALL_STICK_MAX_TIME
+        local cannotStick = not self:CanStickToTarget(myRoot, target)
+        local cannotKill  = self:CheckEnemyHealth(target)
+
+        if lostTarget or timedOut or cannotStick or cannotKill then
+            self.sticking             = false
+            self.stickingStartTime    = 0
+            self.lastEnemyHealth      = nil
+            self.lastHealthChangeTime = 0
+            self.targetFloor          = nil
+            self.inKnifeRangeNow      = false
+            self.forceDescent         = false
+            self.killActivated        = false
+            self.validFrames          = 0
+            self.lastSetCFrame        = nil
+
+            if lostTarget then
+                self.lastStickTarget = nil
+            end
+        else
+            self:StickToTarget(myRoot, target)
+            return
+        end
+    end
+
+    self:ApproachTarget(myRoot, target, dt or 0)
+end
+
+function KillAll:Start()
+    if self.running then return end
+    self.running = true
+    self.swingAccumulator      = 0
+    self.sticking              = false
+    self.stickingStartTime     = 0
+    self.lastEnemyHealth       = nil
+    self.lastHealthChangeTime  = 0
+    self.lastTargetSeenTime    = 0
+    self.currentTarget         = nil
+    self.lockedTargetPlayer    = nil
+    self.lastStickTarget       = nil
+    self.lastStickTargetHum    = nil
+    self.hiding                = false
+    self.hidingUntil           = 0
+    self.targetFloor           = nil
+    self.targetFloorY          = nil
+    self.lastFloorTarget       = nil
+    self.inKnifeRangeNow       = false
+    self.forceDescent          = false
+    self.jitterSide = 1
+    self.jitterCurrent = 0
+    self.jitterNextSwitch = 0
+    self.lastSetCFrame = nil
+    self.validFrames = 0
+    self.killActivated = false
+
+    local myRoot = self:GetRoot(player)
+    if myRoot then
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = { player.Character }
+
+        local origin = myRoot.Position + Vector3.new(0, 5, 0)
+        local result = workspace:Raycast(origin, Vector3.new(0, -500, 0), params)
+
+        if result then
+            self.safePosition = Vector3.new(myRoot.Position.X, result.Position.Y + 3, myRoot.Position.Z)
+        else
+            self.safePosition = myRoot.Position
+        end
+    else
+        self.safePosition = nil
+    end
+
+    self.connections:Add(RunService.Heartbeat:Connect(function(dt)
+        if not self.running then return end
+        self:Update(dt)
+    end))
+
+    self.connections:Add(player.CharacterAdded:Connect(function()
+        table.clear(self.savedCollisions)
+        self.sticking              = false
+        self.safePosition          = nil
+        self.stickingStartTime     = 0
+        self.lastEnemyHealth       = nil
+        self.lastHealthChangeTime  = 0
+        self.lastTargetSeenTime    = 0
+        self.currentTarget         = nil
+        self.lockedTargetPlayer    = nil
+        self.lastStickTarget       = nil
+        self.lastStickTargetHum    = nil
+        self.hiding                = false
+        self.hidingUntil           = 0
+        self.targetFloor           = nil
+        self.targetFloorY          = nil
+        self.lastFloorTarget       = nil
+        self.inKnifeRangeNow       = false
+        self.forceDescent          = false
+        self.jitterSide = 1
+        self.jitterCurrent = 0
+        self.jitterNextSwitch = 0
+        self.lastSetCFrame = nil
+        self.validFrames = 0
+        self.killActivated = false
+    end))
+end
+
+function KillAll:Stop()
+    if not self.running then return end
+
+    local myRoot = self:GetRoot(player)
+    if myRoot and self.safePosition then
+        pcall(function()
+            myRoot.CFrame = CFrame.new(self.safePosition)
+            myRoot.AssemblyLinearVelocity  = Vector3.zero
+            myRoot.AssemblyAngularVelocity = Vector3.zero
+        end)
+    end
+
+    self.running = false
+    self.connections:Cleanup()
+    self.connections = ConnectionManager.new()
+    self:ResetState()
+    self.currentTarget      = nil
+    self.lockedTargetPlayer = nil
+    self.lastStickTarget    = nil
+    self.lastStickTargetHum = nil
+    self.hiding             = false
+    self.hidingUntil        = 0
+    self.inKnifeRangeNow    = false
+    self.forceDescent       = false
+    self.killActivated      = false
+    self.targetFloorY       = nil
+    self.lastFloorTarget    = nil
+end
+
+KillAllInstance = KillAll.new()
+
+-- ===== AUTO TP PADS =====
+local PadZoneConfig = {
+    ["Right Platforms"] = {
+        ["1v1"] = { ZoneName = "PadZone1", MainPad = "Pad1", AltPad = "Pad2" },
+        ["2v2"] = { ZoneName = "PadZone2", MainPad = "Pad1", AltPad = "Pad2" },
+        ["3v3"] = { ZoneName = "PadZone3", MainPad = "Pad1", AltPad = "Pad2" },
+        ["4v4"] = { ZoneName = "PadZone4", MainPad = "Pad1", AltPad = "Pad2" }
+    },
+    ["Left Platforms"] = {
+        ["1v1"] = { ZoneName = "PadZone5", MainPad = "Pad1", AltPad = "Pad2" },
+        ["2v2"] = { ZoneName = "PadZone6", MainPad = "Pad1", AltPad = "Pad2" },
+        ["3v3"] = { ZoneName = "PadZone7", MainPad = "Pad1", AltPad = "Pad2" },
+        ["4v4"] = { ZoneName = "PadZone8", MainPad = "Pad1", AltPad = "Pad2" }
+    }
+}
+
+AutoTeleportMainAlt = {}
+AutoTeleportMainAlt.__index = AutoTeleportMainAlt
+
+function AutoTeleportMainAlt.new()
+    return setmetatable({
+        Running = false, Connections = ConnectionManager.new(), Acc = 0, TickInterval = 0.5,
+        ActiveRole = nil, DuelType = "1v1", PlatformRow = "Right Platforms",
+        LastTeleport = 0, LastVote = 0, LastCancel = 0,
+        TeleportCooldown = 0.5, VoteCooldown = 1, CancelCooldown = 1,
+        VotedMap = nil, HighlightedPad = nil, PadColors = {}, ManualHold = false,
+    }, AutoTeleportMainAlt)
+end
+
+function AutoTeleportMainAlt:GetActiveRole()
+    if self.ActiveRole == "Main" then return "Main" end
+    if self.ActiveRole == "Alt" then return "Alt" end
+    return nil
+end
+
+function AutoTeleportMainAlt:GetRoot()
+    local char = player.Character
+    if not char then return nil end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if root and root:IsA("BasePart") then return root end
+    return nil
+end
+
+function AutoTeleportMainAlt:GetHumanoid()
+    local char = player.Character
+    return char and char:FindFirstChildOfClass("Humanoid") or nil
+end
+
+function AutoTeleportMainAlt:Attr(name)
+    local v = player:GetAttribute(name)
+    if typeof(v) == "string" and v ~= "" then return v end
+    return nil
+end
+
+function AutoTeleportMainAlt:Snapshot()
+    local gameAttr = self:Attr("Game")
+    local mapAttr = self:Attr("Map")
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local alive = hum ~= nil and hum.Health > 0 and root ~= nil
+    return { Game = gameAttr, Map = mapAttr, InGame = gameAttr ~= nil, InMap = gameAttr ~= nil and mapAttr ~= nil, Alive = alive }
+end
+
+function AutoTeleportMainAlt:IsOnMatch()
+    local s = self:Snapshot()
+    return s and s.InGame == true and s.InMap ~= true and s.Alive
+end
+
+function AutoTeleportMainAlt:IsQueued() return self:Snapshot().InGame == true end
+
+function AutoTeleportMainAlt:ResolvePad(role)
+    local rowConfig = PadZoneConfig[self.PlatformRow] or PadZoneConfig["Right Platforms"]
+    local cfg = rowConfig[self.DuelType] or rowConfig["1v1"]
+    local padZones = workspace:FindFirstChild("PadZones")
+    if not padZones then return nil end
+    local zone = padZones:FindFirstChild(cfg.ZoneName)
+    if not zone then return nil end
+    local padName = (role == "Alt") and cfg.AltPad or cfg.MainPad
+    local holder = zone:FindFirstChild(padName)
+    if not holder then return nil end
+    local pad = holder:FindFirstChild("Pad")
+    if pad and pad:IsA("BasePart") then return pad end
+    return nil
+end
+
+function AutoTeleportMainAlt:IsOnPad(pad)
+    if not pad then return false end
+    local root = self:GetRoot()
+    if not root then return false end
+    local rel = pad.CFrame:PointToObjectSpace(root.Position)
+    local half = pad.Size / 2
+    return math.abs(rel.X) <= half.X + 0.5 and math.abs(rel.Z) <= half.Z + 0.5 and rel.Y >= -(half.Y + 6) and rel.Y <= half.Y + 14
+end
+
+function AutoTeleportMainAlt:MarkPad(pad, isAlt)
+    if not pad then self:UnmarkPad(); return end
+    if self.HighlightedPad == pad then return end
+    self:UnmarkPad()
+    self.HighlightedPad = pad
+    self.PadColors[pad] = { Color = pad.Color, Transparency = pad.Transparency }
+    pcall(function()
+        pad.Color = isAlt and Color3.fromRGB(255, 70, 70) or Color3.fromRGB(70, 145, 255)
+        pad.Transparency = 0.5
+    end)
+end
+
+function AutoTeleportMainAlt:UnmarkPad()
+    if self.HighlightedPad and self.PadColors[self.HighlightedPad] then
+        local pad = self.HighlightedPad
+        local saved = self.PadColors[pad]
+        pcall(function()
+            if pad.Parent then
+                pad.Color = saved.Color
+                pad.Transparency = saved.Transparency
+            end
+        end)
+    end
+    self.HighlightedPad = nil
+end
+
+function AutoTeleportMainAlt:FindVoteRemote()
+    local pkgs = ReplicatedStorage:FindFirstChild("Packages")
+    local net = pkgs and pkgs:FindFirstChild("Networking")
+    local r = net and net:FindFirstChild("RF/Voting/Vote")
+    if r and r:IsA("RemoteFunction") then return r end
+    return nil
+end
+
+function AutoTeleportMainAlt:FindVisibleMapVote()
+    local pg = player:FindFirstChild("PlayerGui")
+    local main = pg and pg:FindFirstChild("Main")
+    local mv = main and main:FindFirstChild("MapVoting")
+    local holder = mv and mv:FindFirstChild("VotingHolder")
+    if not holder then return nil end
+    for _, b in ipairs(holder:GetChildren()) do
+        if b:IsA("ImageButton") and b.Visible and b.Name ~= "" then return b.Name end
+    end
+    return nil
+end
+
+function AutoTeleportMainAlt:VoteMap()
+    local s = self:Snapshot()
+    if not self:IsOnMatch() then return end
+    if self.VotedMap == s.Game then return end
+    local now = os.clock()
+    if now - (self.LastVote or 0) < self.VoteCooldown then return end
+    self.LastVote = now
+    local target = self:FindVisibleMapVote()
+    local rf = self:FindVoteRemote()
+    if not (target and rf) then return end
+    self.VotedMap = s.Game
+    pcall(function() rf:InvokeServer(target) end)
+end
+
+function AutoTeleportMainAlt:FindSetStateRemote()
+    local pkgs = ReplicatedStorage:FindFirstChild("Packages")
+    local net = pkgs and pkgs:FindFirstChild("Networking")
+    local r = net and net:FindFirstChild("RE/Match/SetStatePlr")
+    if r and r:IsA("RemoteEvent") then return r end
+    return nil
+end
+
+function AutoTeleportMainAlt:CancelQueue()
+    local now = os.clock()
+    if now - (self.LastCancel or 0) < self.CancelCooldown then return end
+    local ev = self:FindSetStateRemote()
+    if not ev then return end
+    self.LastCancel = now
+    pcall(function() ev:FireServer("REMOVE") end)
+end
+
+function AutoTeleportMainAlt:HideGameFrame()
+    local pg = player:FindFirstChild("PlayerGui")
+    local main = pg and pg:FindFirstChild("Main")
+    local mgf = main and main:FindFirstChild("MainGameFrame")
+    if mgf and mgf:IsA("GuiObject") then pcall(function() mgf.Visible = false end) end
+end
+
+function AutoTeleportMainAlt:HoldCenter()
+    local hum = self:GetHumanoid()
+    local root = self:GetRoot()
+    if hum and root then pcall(function() hum:MoveTo(root.Position) end) end
+end
+
+function AutoTeleportMainAlt:Teleport(pad)
+    if not pad then return end
+    local root = self:GetRoot()
+    local hum = self:GetHumanoid()
+    if not (root and hum) then return end
+    pcall(function()
+        root.AssemblyAngularVelocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        self:CancelQueue()
+        self:HideGameFrame()
+        hum:MoveTo(pad.Position)
+    end)
+end
+
+function AutoTeleportMainAlt:Process()
+    if not self.Running then return end
+    local s = self:Snapshot()
+    if s.InGame then
+        self:UnmarkPad(); self:HoldCenter(); self:VoteMap(); return
+    end
+    local role = self:GetActiveRole()
+    if not role then self:UnmarkPad(); return end
+    local pad = self:ResolvePad(role)
+    self:MarkPad(pad, role == "Alt")
+    if not pad then return end
+    if self:IsOnPad(pad) then return end
+    local now = os.clock()
+    if not self.ManualHold and now - (self.LastTeleport or 0) < self.TeleportCooldown then return end
+    self.LastTeleport = now
+    self:Teleport(pad)
+end
+
+function AutoTeleportMainAlt:Kick() if self.Running then self:Process() end end
+
+function AutoTeleportMainAlt:Start()
+    if self.Running then return end
+    self.Running = true
+    self.Acc = 0; self.LastTeleport = 0; self.LastVote = 0; self.LastCancel = 0
+    self.Connections:Add(player:GetAttributeChangedSignal("Game"):Connect(function() task.defer(function() if self.Running then self:Process() end end) end))
+    self.Connections:Add(player:GetAttributeChangedSignal("Map"):Connect(function() task.defer(function() if self.Running then self:Process() end end) end))
+    self.Connections:Add(player:GetAttributeChangedSignal("Team"):Connect(function() task.defer(function() if self.Running then self:Process() end end) end))
+    self.Connections:Add(RunService.Heartbeat:Connect(function(dt)
+        if not self.Running then return end
+        self.Acc = self.Acc + dt
+        if self.Acc >= self.TickInterval then self.Acc = 0; self:Process() end
+    end))
+    self:Process()
+end
+
+function AutoTeleportMainAlt:Stop()
+    if not self.Running then return end
+    self.Running = false
+    self.Connections:Cleanup()
+    self.Connections = ConnectionManager.new()
+    self:UnmarkPad()
+    self.VotedMap = nil
+end
+
+AutoTeleportMainAltInstance = AutoTeleportMainAlt.new()
+
+
+-- ===== Silent / AutoShoot (raycast hook) =====
+getgenv().FlexusTargetPart = nil
+local nexFovRadius = 120
+local fovVisiblePreference = false
+
+local oldNamecall
+if hookmetamethod and getnamecallmethod and checkcaller then
+    pcall(function()
+        oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+            local method = getnamecallmethod()
+            if not checkcaller() and getgenv().FlexusTargetPart then
+                if method == "Raycast" and self == workspace then
+                    local target = getgenv().FlexusTargetPart
+                    if target and target.Parent then
+                        local origin, direction, p3 = ...
+                        if typeof(direction) == "Vector3" and direction.Magnitude > 20 then
+                            local cameraOrigin = workspace.CurrentCamera.CFrame.Position
+                            if (origin - cameraOrigin).Magnitude >= 1 then
+                                local newDir = (target.Position - origin).Unit * 5000
+                                return oldNamecall(self, origin, newDir, p3)
+                            end
+                        end
+                    else
+                        getgenv().FlexusTargetPart = nil
+                    end
+                elseif self == workspace and typeof(method) == "string" and method:sub(1, 13) == "FindPartOnRay" then
+                    local target = getgenv().FlexusTargetPart
+                    if target and target.Parent then
+                        local ray, p2, p3, p4 = ...
+                        if typeof(ray) == "Ray" and ray.Direction.Magnitude > 20 then
+                            local cameraOrigin = workspace.CurrentCamera.CFrame.Position
+                            if (ray.Origin - cameraOrigin).Magnitude >= 1 then
+                                local newRay = Ray.new(ray.Origin, (target.Position - ray.Origin).Unit * 5000)
+                                return oldNamecall(self, newRay, p2, p3, p4)
+                            end
+                        end
+                    else
+                        getgenv().FlexusTargetPart = nil
+                    end
+                end
+            end
+            return oldNamecall(self, ...)
+        end)
+    end)
+end
+
+local function nexGetTargetPartName(mode)
+    if mode == "Torso" or mode == "HumanoidRootPart" then return "HumanoidRootPart" end
+    if mode == "Full" or mode == "Full Body" or mode == "Cuerpo" then return "Full" end
+    return "Head"
+end
+
+task.spawn(function()
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    while task.wait(0.08) do
+        local anyOn = autoShootEnabled or autoShootAgresivoEnabled or silentAimManualEnabled or silentAimFovEnabled
+        if not anyOn then
+            getgenv().FlexusTargetPart = nil
+        elseif not estaEnLobby() then
+            local char = player.Character
+            local head = char and char:FindFirstChild("Head")
+            local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+            if head and myRoot then
+                params.FilterDescendantsInstances = {char}
+                local closestTargetPart, bestScore = nil, math.huge
+                local useFov = silentAimFovEnabled
+                local partMode = silentAimTargetPart or autoShootTargetPart or "Head"
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr ~= player and isEnemy(plr) then
+                        local c = plr.Character
+                        local hum = c and c:FindFirstChildOfClass("Humanoid")
+                        if c and hum and hum.Health > 0 then
+                            local parts = {}
+                            if autoShootAgresivoEnabled or partMode == "Full" or partMode == "Full Body" then
+                                for _, p in ipairs(c:GetChildren()) do
+                                    if p:IsA("BasePart") then table.insert(parts, p) end
+                                end
+                            else
+                                local pn = nexGetTargetPartName(partMode)
+                                local p = c:FindFirstChild(pn) or c:FindFirstChild("Head")
+                                if p then table.insert(parts, p) end
+                            end
+                            for _, part in ipairs(parts) do
+                                local dist = (part.Position - myRoot.Position).Magnitude
+                                local pos2D, onScreen = Camera:WorldToViewportPoint(part.Position)
+                                local distCenter = (Vector2.new(pos2D.X, pos2D.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                                local okTarget = false
+                                local score = dist
+                                if useFov then
+                                    if onScreen and distCenter <= (silentAimFOVRadius or nexFovRadius) then
+                                        okTarget = true
+                                        score = distCenter
+                                    end
+                                else
+                                    okTarget = true
+                                    score = dist
+                                end
+                                if okTarget and score < bestScore then
+                                    local dir = part.Position - head.Position
+                                    local hit = workspace:Raycast(head.Position, dir, params)
+                                    if not hit or (hit.Instance and hit.Instance:IsDescendantOf(c)) then
+                                        bestScore = score
+                                        closestTargetPart = part
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                if closestTargetPart then
+                    getgenv().FlexusTargetPart = closestTargetPart
+                    -- auto shoot: simular click si arma equipada
+                    if autoShootEnabled or autoShootAgresivoEnabled then
+                        local tool = char:FindFirstChildOfClass("Tool")
+                        if tool then
+                            pcall(function()
+                                if mouse1press then mouse1press() task.wait(0.02) mouse1release()
+                                elseif mouse1click then mouse1click()
+                                end
+                            end)
+                        end
+                    end
+                else
+                    getgenv().FlexusTargetPart = nil
+                end
+            end
+        end
+    end
+end)
+
+
+
 task.spawn(function()
     while true do
         refreshIdentity()
@@ -1266,20 +2458,11 @@ dmvsKillSoundState = {
     Enabled = false,
     Selected = "Among Us",
     Options = {
-        "Good",
-        "Among Us",
-        "Arsenal OG",
-        "Onichan",
-        "No Podemos",
-        "Hotline Miami",
-        "Gallina",
-        "Pathetic",
-        "You Going to Cry",
-        "You Are an Idiot",
-        "Fatherless",
-        "Ara Ara",
-        "Super Excelente",
-        "No Muerdo",
+        "Good", "Among Us", "Arsenal OG", "Onichan", "No Podemos", "Hotline Miami",
+        "Gallina", "Pathetic", "You Going to Cry", "You Are an Idiot", "Fatherless",
+        "Ara Ara", "Super Excelente", "No Muerdo",
+        "Onichaaan", "Omagaaa", "korummm", "FAAAH XD", "Campana meme", "Enrique",
+        "Magia de anime", "Risa anime", "Gemido", "Magic 2", "OwO",
     },
     Assets = {
         Good = "131977397046203",
@@ -1296,6 +2479,17 @@ dmvsKillSoundState = {
         ["Ara Ara"] = "8233569802",
         ["Super Excelente"] = "126508827711955",
         ["No Muerdo"] = "74938787478729",
+        Onichaaan = "114361503583259",
+        Omagaaa = "4496966777",
+        korummm = "119896940405402",
+        ["FAAAH XD"] = "92076037937225",
+        ["Campana meme"] = "107378927201728",
+        Enrique = "100688006999379",
+        ["Magia de anime"] = "109296938403067",
+        ["Risa anime"] = "93739527256723",
+        Gemido = "94981264286350",
+        ["Magic 2"] = "100507897550384",
+        OwO = "71942674274967",
     },
     PlayerConnections = {}
 }
@@ -1761,6 +2955,8 @@ local AUTO_PART_NAMES = {
 local EMPTY_PART_NAMES = {}
 
 local silentAimTargetPart = "Head"
+local autoShootAgresivoEnabled = false
+local silentAimFovEnabled = false
 local silentAimManualEnabled = false
 local silentAimMode = "Nearest"
 local silentAimFOVVisible = false
@@ -3651,6 +4847,27 @@ _G.VXS_CombatToggles.auto = combateTab:Toggle({
     end
 })
 combateTab:Toggle({
+    Title = "Auto Shoot Agresivo",
+    Desc = "Apunta a cualquier parte del cuerpo visible.",
+    Flag = "VXS_AutoShootAgr",
+    Value = false,
+    Callback = function(v)
+        autoShootAgresivoEnabled = v
+        if v then autoShootEnabled = true end
+    end
+})
+combateTab:Toggle({
+    Title = "Silent Aim (FOV)",
+    Desc = "Silent solo dentro del circulo FOV.",
+    Flag = "VXS_SilentFOVMode",
+    Value = false,
+    Callback = function(v)
+        silentAimFovEnabled = v
+        if v then silentAimManualEnabled = true end
+    end
+})
+
+combateTab:Toggle({
     Title = "Auto Shoot Knife",
     Desc = "Tambien con cuchillo equipado.",
     Flag = "VXS_AutoKnife",
@@ -3784,54 +5001,50 @@ combateTab:Slider({
 -- ---------- Dead Zone ----------
 
 combateTab:Divider({Title = "Kill All"})
+local KillAllEnabled = false
 local killAllToggle = combateTab:Toggle({
     Title = "Kill All",
-    Desc = "Proximamente — bloqueado.",
+    Desc = "Se acerca y ataca enemigos con cuchillo.",
     Flag = "VXS_KillAll",
     Value = false,
-    Locked = true,
     Callback = function(value)
-        -- Bloqueado: no se puede activar
-        dmvsKillAllState.Enabled = false
+        KillAllEnabled = value and true or false
+        if dmvsKillAllState then dmvsKillAllState.Enabled = KillAllEnabled end
         pcall(function()
-            if notify then notify({Title = "Kill All", Content = "Bloqueado (Proximamente)"}) end
+            if KillAllEnabled then
+                if KillAllInstance and KillAllInstance.Start then KillAllInstance:Start() end
+            else
+                if KillAllInstance and KillAllInstance.Stop then KillAllInstance:Stop() end
+            end
         end)
-        -- Forzar off en UI si WindUI lo permite
-        task.defer(function()
-            pcall(function()
-                if killAllToggle then
-                    if killAllToggle.Set then killAllToggle:Set(false)
-                    elseif killAllToggle.SetValue then killAllToggle:SetValue(false)
-                    end
-                    if killAllToggle.Lock then killAllToggle:Lock("Proximamente") end
-                    if killAllToggle.SetLocked then killAllToggle:SetLocked(true) end
-                end
-            end)
+        pcall(function()
+            if notify then notify({Title = "Kill All", Content = KillAllEnabled and "ON" or "OFF"}) end
         end)
     end
 })
-pcall(function()
-    if killAllToggle then
-        if killAllToggle.Lock then killAllToggle:Lock("Proximamente") end
-        if killAllToggle.SetLocked then killAllToggle:SetLocked(true) end
-        if killAllToggle.Locked ~= nil then killAllToggle.Locked = true end
-    end
-end)
-
-combateTab:Divider({Title = "Dead Zone"})
 combateTab:Toggle({
-    Title = "Show Dead Zone",
-    Desc = "Zona donde el toque no activa la macro (arrastrable).",
-    Flag = "DeadZoneVisible",
-    Value = false,
-    Callback = function(s) deadZoneFrame.Visible = s end
+    Title = "Kill All Jitter",
+    Desc = "Movimiento lateral al acercarse.",
+    Flag = "VXS_KillAllJitter",
+    Value = true,
+    Callback = function(v) KillAllJitterEnabled = v and true or false end
 })
 combateTab:Slider({
-    Title = "Dead Zone Size",
-    Flag = "DeadZoneSize",
-    Value = {Min = 80, Max = 400, Default = 150},
-    Step = 1,
-    Callback = function(v) deadZoneFrame.Size = UDim2.new(0, v, 0, v) end
+    Title = "Kill All Trigger Radius",
+    Desc = "Distancia de activacion.",
+    Flag = "VXS_KillAllRadius",
+    Value = {Min = 3, Max = 25, Default = 6},
+    Step = 0.5,
+    Callback = function(v)
+        KillAllTriggerRadius = v
+        pcall(function()
+            if KILLALL_TRIGGER_RADIUS then end
+        end)
+        -- actualizar constante runtime
+        pcall(function()
+            getfenv()["KILLALL_TRIGGER_RADIUS"] = v
+        end)
+    end
 })
 
 -- ---------- Bubbles ----------
@@ -3977,7 +5190,7 @@ task.spawn(function()
         {key = "macro",   label = "MC", tip = "Macro", locked = false},
         {key = "trigger", label = "TB", tip = "TriggerBot", locked = false},
         {key = "hitbox",  label = "HB", tip = "Hitbox", locked = false},
-        {key = "killall", label = "KA", tip = "Kill All", locked = true},
+        {key = "killall", label = "KA", tip = "Kill All", locked = false},
     }
 
     local function getState(key)
@@ -3986,7 +5199,7 @@ task.spawn(function()
         elseif key == "macro" then return macroActive
         elseif key == "trigger" then return dmvsAutoMacroState and dmvsAutoMacroState.Enabled
         elseif key == "hitbox" then return hitboxEnabled
-        elseif key == "killall" then return false -- siempre bloqueado
+        elseif key == "killall" then return (dmvsKillAllState and dmvsKillAllState.Enabled) or (KillAllEnabled == true)
         end
         return false
     end
@@ -3994,8 +5207,17 @@ task.spawn(function()
     -- Aplica logica + intenta reflejar toggle del menu si WindUI expone Set
     local function setState(key, value)
         if key == "killall" then
-            dmvsKillAllState.Enabled = false
-            pcall(function() if notify then notify({Title = "Kill All", Content = "Bloqueado (Proximamente)"}) end end)
+            local on = value and true or false
+            if dmvsKillAllState then dmvsKillAllState.Enabled = on end
+            pcall(function()
+                if on then
+                    if KillAllInstance and KillAllInstance.Start then KillAllInstance:Start() end
+                else
+                    if KillAllInstance and KillAllInstance.Stop then KillAllInstance:Stop() end
+                end
+            end)
+            pcall(function() if notify then notify({Title = "Kill All", Content = on and "ON" or "OFF"}) end end)
+            pcall(function() if _G.VXS_ScheduleSave then _G.VXS_ScheduleSave() end end)
             return
         end
         if key == "silent" then
@@ -4220,6 +5442,84 @@ end)()
 -- ===== FARM TAB (Onyx) =====
 ;(function()
 local farmTab = Window:Tab({Title = "Farm", Icon = "coins", ShowTabTitle = true, Border = true})
+
+
+farmTab:Divider({Title = "Pads / Plataformas"})
+local autoTPMainToggle, autoTPAltToggle
+autoTPMainToggle = farmTab:Toggle({
+    Title = "Auto Teleport (Main)",
+    Desc = "Te lleva al pad Main. Se desactiva si activas Alt.",
+    Flag = "VXS_AutoTP_Main",
+    Value = false,
+    Callback = function(value)
+        if not AutoTeleportMainAltInstance then return end
+        if value then
+            AutoTeleportMainAltInstance.ActiveRole = "Main"
+            pcall(function()
+                if autoTPAltToggle and autoTPAltToggle.Set then autoTPAltToggle:Set(false) end
+            end)
+            AutoTeleportMainAltInstance:Stop()
+            AutoTeleportMainAltInstance:Start()
+        else
+            if AutoTeleportMainAltInstance.ActiveRole == "Main" then
+                AutoTeleportMainAltInstance.ActiveRole = nil
+                AutoTeleportMainAltInstance:Stop()
+            end
+        end
+    end
+})
+autoTPAltToggle = farmTab:Toggle({
+    Title = "Auto Teleport (Alt)",
+    Desc = "Te lleva al pad Alt. Se desactiva si activas Main.",
+    Flag = "VXS_AutoTP_Alt",
+    Value = false,
+    Callback = function(value)
+        if not AutoTeleportMainAltInstance then return end
+        if value then
+            AutoTeleportMainAltInstance.ActiveRole = "Alt"
+            pcall(function()
+                if autoTPMainToggle and autoTPMainToggle.Set then autoTPMainToggle:Set(false) end
+            end)
+            AutoTeleportMainAltInstance:Stop()
+            AutoTeleportMainAltInstance:Start()
+        else
+            if AutoTeleportMainAltInstance.ActiveRole == "Alt" then
+                AutoTeleportMainAltInstance.ActiveRole = nil
+                AutoTeleportMainAltInstance:Stop()
+            end
+        end
+    end
+})
+farmTab:Dropdown({
+    Title = "Tipo de Duelo",
+    Flag = "VXS_AutoTP_DuelType",
+    Values = { "1v1", "2v2", "3v3", "4v4" },
+    Value = "1v1",
+    Callback = function(value)
+        if not AutoTeleportMainAltInstance then return end
+        if PadZoneConfig and PadZoneConfig["Right Platforms"] and PadZoneConfig["Right Platforms"][value] then
+            AutoTeleportMainAltInstance.DuelType = value
+        else
+            AutoTeleportMainAltInstance.DuelType = "1v1"
+        end
+        pcall(function() AutoTeleportMainAltInstance:Kick() end)
+    end
+})
+farmTab:Dropdown({
+    Title = "Fila de Plataformas",
+    Flag = "VXS_AutoTP_Row",
+    Values = { "Right Platforms", "Left Platforms" },
+    Value = "Right Platforms",
+    Callback = function(value)
+        if not AutoTeleportMainAltInstance then return end
+        if PadZoneConfig and PadZoneConfig[value] then
+            AutoTeleportMainAltInstance.PlatformRow = value
+        else
+            AutoTeleportMainAltInstance.PlatformRow = "Right Platforms"
+        end
+        pcall(function() AutoTeleportMainAltInstance:Kick() end)
+    end
+})
 
 farmTab:Divider({Title = "Auto Farm"})
 local autoFarmCoins = false
@@ -5256,6 +6556,169 @@ customTab:Dropdown({
     end
 })
 
+-- Disparo / Recarga
+local RecargaDisparoEnabled = false
+local KillSoundVolumeFX = 1
+do
+    local SoundService = game:GetService("SoundService")
+    local ShootSoundId = "680140087"
+    local ReloadSoundId = "138084889"
+    local ShootSoundPlayer = Instance.new("Sound")
+    ShootSoundPlayer.Name = "FlexusShootFX"
+    ShootSoundPlayer.Parent = SoundService
+    local ReloadSoundPlayer = Instance.new("Sound")
+    ReloadSoundPlayer.Name = "FlexusReloadFX"
+    ReloadSoundPlayer.Parent = SoundService
+    local shootToken = 0
+    local SHOOT_MAX_DUR = 1.2
+
+    local function PlayShootSound()
+        if not RecargaDisparoEnabled then return end
+        shootToken = shootToken + 1
+        local my = shootToken
+        ShootSoundPlayer:Stop()
+        ShootSoundPlayer.SoundId = "rbxassetid://" .. ShootSoundId
+        ShootSoundPlayer.Volume = KillSoundVolumeFX
+        ShootSoundPlayer:Play()
+        task.delay(SHOOT_MAX_DUR, function()
+            if shootToken == my and ShootSoundPlayer.Playing then
+                ShootSoundPlayer:Stop()
+            end
+        end)
+    end
+
+    local function PlayReloadSound()
+        if not RecargaDisparoEnabled then return end
+        ReloadSoundPlayer:Stop()
+        ReloadSoundPlayer.SoundId = "rbxassetid://" .. ReloadSoundId
+        ReloadSoundPlayer.Volume = KillSoundVolumeFX
+        ReloadSoundPlayer:Play()
+    end
+
+    local FIRE_KW = { "fire", "shoot", "shot", "gun", "burst", "shotgun", "gunshot", "muzzle", "rifle", "pistol", "shooting", "firing" }
+    local function isFireSound(s)
+        if not s:IsA("Sound") then return false end
+        local n = string.lower(s.Name)
+        for _, kw in ipairs(FIRE_KW) do
+            if string.find(n, kw, 1, true) then return true end
+        end
+        return false
+    end
+
+    local function estaRecargando(arma)
+        if not arma or not arma:IsA("Tool") then return false end
+        for _, name in ipairs({"Reloading", "IsReloading", "reloading", "isReloading", "Reload", "reload"}) do
+            local v = arma:GetAttribute(name)
+            if v == true or v == "true" then return true end
+        end
+        for _, child in ipairs(arma:GetChildren()) do
+            if child:IsA("BoolValue") and child.Value == true then
+                local n = string.lower(child.Name)
+                if string.find(n, "reload") or string.find(n, "recarg") then return true end
+            end
+        end
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+                local animId = track.Animation and track.Animation.AnimationId or ""
+                if string.find(string.lower(animId), "reload") then return true end
+            end
+        end
+        for _, s in ipairs(arma:GetDescendants()) do
+            if s:IsA("Sound") and s.Playing then
+                local n = string.lower(s.Name)
+                if string.find(n, "reload") or string.find(n, "recarg") then return true end
+            end
+        end
+        return false
+    end
+
+    local function HookFireSound(s)
+        if not s:IsA("Sound") then return end
+        if not isFireSound(s) then return end
+        if s:GetAttribute("FlexusFireHooked") then return end
+        s:SetAttribute("FlexusFireHooked", true)
+        s.Played:Connect(function()
+            if not RecargaDisparoEnabled then return end
+            local char = player.Character
+            if not char then return end
+            local bp = player:FindFirstChildOfClass("Backpack")
+            if s:IsDescendantOf(char) or (bp and s:IsDescendantOf(bp)) then
+                PlayShootSound()
+            end
+        end)
+    end
+
+    local function HookShootOnTool(tool)
+        if not tool or not tool:IsA("Tool") then return end
+        for _, d in ipairs(tool:GetDescendants()) do
+            HookFireSound(d)
+        end
+        if not tool:GetAttribute("FlexusToolHooked") then
+            tool:SetAttribute("FlexusToolHooked", true)
+            tool.DescendantAdded:Connect(HookFireSound)
+        end
+    end
+
+    local function HookShootOnRoot(root)
+        if not root then return end
+        for _, child in ipairs(root:GetChildren()) do
+            if child:IsA("Tool") then HookShootOnTool(child) end
+        end
+        root.ChildAdded:Connect(function(child)
+            if child:IsA("Tool") then HookShootOnTool(child) end
+        end)
+    end
+
+    pcall(function()
+        if player.Character then HookShootOnRoot(player.Character) end
+        player.CharacterAdded:Connect(HookShootOnRoot)
+        local bp = player:FindFirstChildOfClass("Backpack")
+        if bp then
+            for _, c in ipairs(bp:GetChildren()) do HookShootOnTool(c) end
+            bp.ChildAdded:Connect(function(c) if c:IsA("Tool") then HookShootOnTool(c) end end)
+        end
+    end)
+
+    task.spawn(function()
+        local lastReloadState = false
+        while task.wait(0.05) do
+            if not RecargaDisparoEnabled then
+                lastReloadState = false
+            else
+                local char = player.Character
+                local arma = char and char:FindFirstChildOfClass("Tool")
+                if not arma then
+                    lastReloadState = false
+                else
+                    local recargando = estaRecargando(arma)
+                    if recargando and not lastReloadState then
+                        PlayReloadSound()
+                    end
+                    lastReloadState = recargando
+                end
+            end
+        end
+    end)
+end
+
+customTab:Toggle({
+    Title = "Sonido Disparo + Recarga",
+    Desc = "Efecto de audio al disparar y recargar.",
+    Flag = "RecargaDisparo",
+    Value = false,
+    Callback = function(v) RecargaDisparoEnabled = v and true or false end
+})
+customTab:Slider({
+    Title = "Volumen FX",
+    Flag = "KillSoundVol",
+    Value = {Min = 0, Max = 2, Default = 1},
+    Step = 0.1,
+    Callback = function(v) KillSoundVolumeFX = v end
+})
+
+
 
 
 animTab = Window:Tab({Title = "loc:tab.animations", Icon = "person-standing", ShowTabTitle = true, Border = true})
@@ -5267,7 +6730,7 @@ animTab:Dropdown({
     Values = animList,
     SearchBarEnabled = true,
     Value = "None",
-    Callback = function(v) selectedFullBundle = v end
+    Callback = function(v) selectedFullBundle = v; pcall(function() if _G.VXS_ScheduleSave then _G.VXS_ScheduleSave() end end) end
 })
 animTab:Button({
     Title = "loc:button.apply_full_pack",
@@ -5299,7 +6762,7 @@ animTab:Dropdown({
     Values = animList,
     SearchBarEnabled = true,
     Value = "None",
-    Callback = function(v) mixParts.Idle = v if autoMixApplyEnabled then applySelectedMix() end end
+    Callback = function(v) mixParts.Idle = v if autoMixApplyEnabled then applySelectedMix() end pcall(function() if _G.VXS_ScheduleSave then _G.VXS_ScheduleSave() end end) end
 })
 animTab:Dropdown({
     Title = "loc:dropdown.walk",
@@ -5307,7 +6770,7 @@ animTab:Dropdown({
     Values = animList,
     SearchBarEnabled = true,
     Value = "None",
-    Callback = function(v) mixParts.Walk = v if autoMixApplyEnabled then applySelectedMix() end end
+    Callback = function(v) mixParts.Walk = v if autoMixApplyEnabled then applySelectedMix() end pcall(function() if _G.VXS_ScheduleSave then _G.VXS_ScheduleSave() end end) end
 })
 animTab:Dropdown({
     Title = "loc:dropdown.run",
@@ -5315,7 +6778,7 @@ animTab:Dropdown({
     Values = animList,
     SearchBarEnabled = true,
     Value = "None",
-    Callback = function(v) mixParts.Run = v if autoMixApplyEnabled then applySelectedMix() end end
+    Callback = function(v) mixParts.Run = v if autoMixApplyEnabled then applySelectedMix() end pcall(function() if _G.VXS_ScheduleSave then _G.VXS_ScheduleSave() end end) end
 })
 animTab:Dropdown({
     Title = "loc:dropdown.jump",
@@ -5323,7 +6786,7 @@ animTab:Dropdown({
     Values = animList,
     SearchBarEnabled = true,
     Value = "None",
-    Callback = function(v) mixParts.Jump = v if autoMixApplyEnabled then applySelectedMix() end end
+    Callback = function(v) mixParts.Jump = v if autoMixApplyEnabled then applySelectedMix() end pcall(function() if _G.VXS_ScheduleSave then _G.VXS_ScheduleSave() end end) end
 })
 animTab:Dropdown({
     Title = "loc:dropdown.fall",
@@ -5331,7 +6794,7 @@ animTab:Dropdown({
     Values = animList,
     SearchBarEnabled = true,
     Value = "None",
-    Callback = function(v) mixParts.Fall = v if autoMixApplyEnabled then applySelectedMix() end end
+    Callback = function(v) mixParts.Fall = v if autoMixApplyEnabled then applySelectedMix() end pcall(function() if _G.VXS_ScheduleSave then _G.VXS_ScheduleSave() end end) end
 })
 animTab:Dropdown({
     Title = "loc:dropdown.climb",
@@ -5339,7 +6802,7 @@ animTab:Dropdown({
     Values = animList,
     SearchBarEnabled = true,
     Value = "None",
-    Callback = function(v) mixParts.Climb = v if autoMixApplyEnabled then applySelectedMix() end end
+    Callback = function(v) mixParts.Climb = v if autoMixApplyEnabled then applySelectedMix() end pcall(function() if _G.VXS_ScheduleSave then _G.VXS_ScheduleSave() end end) end
 })
 animTab:Button({
     Title = "loc:button.mix_apply",
@@ -5373,6 +6836,7 @@ local VXS_CONFIG_FILE = VXS_CONFIG_FOLDER .. "/autosave.json"
 local vxsSaveBusy = false
 local vxsSaveQueued = false
 local vxsConfigLoaded = false
+local vxsIsLoadingConfig = false
 
 local function vxsEnsureFolder()
     if isfolder and not isfolder(VXS_CONFIG_FOLDER) then
@@ -5437,6 +6901,14 @@ local function vxsCollectState()
             triggerRange = dmvsAutoMacroState and dmvsAutoMacroState.Range or 250,
             killSoundSelected = dmvsKillSoundState and dmvsKillSoundState.Selected or "Among Us",
             deadZoneSize = deadZoneFrame and deadZoneFrame.Size.X.Offset or 150,
+            selectedFullBundle = selectedFullBundle or "None",
+            mixIdle = mixParts and mixParts.Idle or "None",
+            mixWalk = mixParts and mixParts.Walk or "None",
+            mixRun = mixParts and mixParts.Run or "None",
+            mixJump = mixParts and mixParts.Jump or "None",
+            mixFall = mixParts and mixParts.Fall or "None",
+            mixClimb = mixParts and mixParts.Climb or "None",
+            autoMixApply = autoMixApplyEnabled and true or false,
         },
         colors = {
             camlockFOV = camlockFOVColor and {R = camlockFOVColor.R, G = camlockFOVColor.G, B = camlockFOVColor.B} or nil,
@@ -5482,16 +6954,8 @@ local function vxsSaveConfig()
     end
 end
 
-_G.VXS_ScheduleSave = function()
-    if not vxsConfigLoaded then return end
-    if vxsSaveBusy then
-        vxsSaveQueued = true
-        return
-    end
-    task.delay(0.35, function()
-        vxsSaveConfig()
-    end)
-end
+-- ScheduleSave se define junto al ConfigManager abajo
+
 
 
 -- Forzar que el toggle de WindUI se vea ON/OFF visualmente
@@ -5532,6 +6996,21 @@ local function vxsForceToggleVisual(el, value)
 end
 
 local function vxsSyncAllToggleVisuals()
+    -- Version LIGERA: no recorre todos los flags ni dispara callbacks en masa (congela)
+    if vxsIsLoadingConfig then
+        -- solo bubbles durante load
+        pcall(function()
+            if _G.VXS_UpdateBubble then
+                _G.VXS_UpdateBubble("silent", silentAimManualEnabled)
+                _G.VXS_UpdateBubble("auto", autoShootEnabled)
+                _G.VXS_UpdateBubble("macro", macroActive)
+                _G.VXS_UpdateBubble("trigger", dmvsAutoMacroState and dmvsAutoMacroState.Enabled)
+                _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
+            end
+        end)
+        return
+    end
+    -- Visual combate (pocos elementos)
     local refs = _G.VXS_CombatToggles or {}
     local map = {
         silent = silentAimManualEnabled,
@@ -5541,9 +7020,15 @@ local function vxsSyncAllToggleVisuals()
         hitbox = hitboxEnabled,
     }
     for k, val in pairs(map) do
-        vxsForceToggleVisual(refs[k], val)
+        local el = refs[k]
+        if type(el) == "table" then
+            pcall(function()
+                if el.Set then el:Set(val)
+                elseif el.SetValue then el:SetValue(val)
+                end
+            end)
+        end
     end
-    -- bubbles
     pcall(function()
         if _G.VXS_UpdateBubble then
             _G.VXS_UpdateBubble("silent", silentAimManualEnabled)
@@ -5553,31 +7038,7 @@ local function vxsSyncAllToggleVisuals()
             _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
         end
     end)
-    -- Flags WindUI / Window
-    pcall(function()
-        local flags = {
-            VXS_SilentAim = silentAimManualEnabled,
-            VXS_AutoShoot = autoShootEnabled,
-            MacroEnable = macroActive,
-            VXS_TriggerBot = dmvsAutoMacroState and dmvsAutoMacroState.Enabled,
-            HitboxEnable = hitboxEnabled,
-            VXS_SilentShowFOV = silentAimFOVVisible,
-            CamlockEnable = camlockEnabled,
-            KillSoundEnabled = dmvsKillSoundState and dmvsKillSoundState.Enabled,
-            DeadZoneVisible = deadZoneFrame and deadZoneFrame.Visible,
-        }
-        for flag, val in pairs(flags) do
-            if Window and Window.SetFlag then Window:SetFlag(flag, val) end
-            if WindUI and WindUI.SetFlag then WindUI:SetFlag(flag, val) end
-            if Window and type(Window.Flags) == "table" then Window.Flags[flag] = val end
-            if WindUI and type(WindUI.Flags) == "table" then WindUI.Flags[flag] = val end
-            if Window and Window.ConfigManager and Window.ConfigManager.Set then
-                Window.ConfigManager:Set(flag, val)
-            end
-        end
-    end)
 end
-
 
 local function vxsApplyState(data)
     if type(data) ~= "table" then return end
@@ -5624,6 +7085,16 @@ local function vxsApplyState(data)
     if vl.deadZoneSize and deadZoneFrame then
         deadZoneFrame.Size = UDim2.new(0, vl.deadZoneSize, 0, vl.deadZoneSize)
     end
+    if vl.selectedFullBundle then selectedFullBundle = vl.selectedFullBundle end
+    if mixParts then
+        if vl.mixIdle then mixParts.Idle = vl.mixIdle end
+        if vl.mixWalk then mixParts.Walk = vl.mixWalk end
+        if vl.mixRun then mixParts.Run = vl.mixRun end
+        if vl.mixJump then mixParts.Jump = vl.mixJump end
+        if vl.mixFall then mixParts.Fall = vl.mixFall end
+        if vl.mixClimb then mixParts.Climb = vl.mixClimb end
+    end
+    if vl.autoMixApply ~= nil then autoMixApplyEnabled = vl.autoMixApply and true or false end
 
     if col.camlockFOV then
         camlockFOVColor = Color3.new(col.camlockFOV.R or 1, col.camlockFOV.G or 1, col.camlockFOV.B or 1)
@@ -5677,13 +7148,15 @@ local function vxsApplyState(data)
             _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
         end)
     end
-    -- Sincronizar toggles del menu (visual ON) + bubbles
-    pcall(vxsSyncAllToggleVisuals)
-    task.defer(function()
-        task.wait(0.15)
-        pcall(vxsSyncAllToggleVisuals)
-        task.wait(0.5)
-        pcall(vxsSyncAllToggleVisuals)
+    -- Solo bubbles (sin Set masivo de UI)
+    pcall(function()
+        if _G.VXS_UpdateBubble then
+            _G.VXS_UpdateBubble("silent", silentAimManualEnabled)
+            _G.VXS_UpdateBubble("auto", autoShootEnabled)
+            _G.VXS_UpdateBubble("macro", macroActive)
+            _G.VXS_UpdateBubble("trigger", dmvsAutoMacroState and dmvsAutoMacroState.Enabled)
+            _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
+        end
     end)
     if tg.bubbleDrag and _G.VXS_BubbleDragMode then
         pcall(function() _G.VXS_BubbleDragMode(true) end)
@@ -5695,50 +7168,394 @@ local function vxsApplyState(data)
 end
 
 local function vxsLoadConfig()
-    if not (isfile and readfile and HttpService) then
-        vxsConfigLoaded = true
-        return
-    end
+    -- Solo bubbles / pos. Los toggles los carga ConfigManager (WindUI).
+    if not (isfile and readfile and HttpService) then return end
     pcall(function()
         vxsEnsureFolder()
         if isfile(VXS_CONFIG_FILE) then
             local raw = readfile(VXS_CONFIG_FILE)
             local data = HttpService:JSONDecode(raw)
-            vxsApplyState(data)
+            if type(data) == "table" and type(data.bubbles) == "table" then
+                _G.VXS_SavedBubblePos = data.bubbles
+            end
         end
     end)
-    vxsConfigLoaded = true
 end
 
--- Cargar despues de que exista UI/logica/bubbles y refrescar visual de toggles
-task.defer(function()
-    task.wait(1.0)
-    vxsLoadConfig()
-    task.wait(0.3)
-    pcall(vxsSyncAllToggleVisuals)
-    task.wait(0.8)
-    pcall(vxsSyncAllToggleVisuals)
-end)
+-- ==========================================
+-- SIN AUTO-SAVE (guardado manual en tab Guardado)
+-- ==========================================
+_G.VXS_ScheduleSave = function() end -- desactivado
+vxsConfigLoaded = true
+vxsIsLoadingConfig = false
 
--- Guardar periodicamente
-task.spawn(function()
-    while not dmvsDestroyed do
-        task.wait(4)
-        if vxsConfigLoaded then
-            pcall(vxsSaveConfig)
+
+-- ===== MUSIC (Extra) =====
+;(function()
+    local musicTab = Window:Tab({Title = "Music", Icon = "music", ShowTabTitle = true, Border = true})
+    local SoundService = game:GetService("SoundService")
+    local MusicPlayer = Instance.new("Sound")
+    MusicPlayer.Name = "FlexusHub_MusicPlayer"
+    MusicPlayer.Looped = false
+    MusicPlayer.Volume = 0.5
+    MusicPlayer.Parent = SoundService
+
+    local SongList = {
+        { Name = "Cancion 1", Id = "84944985070181" },
+        { Name = "Cancion 2", Id = "87570666848900" },
+        { Name = "Cancion 3", Id = "82746224492420" },
+        { Name = "Cancion 4", Id = "71393805905055" },
+        { Name = "Cancion 5", Id = "75688616622595" },
+        { Name = "Cancion 6", Id = "135609653444873" },
+        { Name = "Cancion 7", Id = "93699644879957" },
+        { Name = "Cancion 8", Id = "110398343528156" },
+        { Name = "Cancion 9", Id = "138863509657081" },
+        { Name = "Cancion 10", Id = "115440201770223" },
+        { Name = "Cancion 11", Id = "128048502331483" },
+        { Name = "Cancion 12", Id = "135321902579514" },
+        { Name = "Cancion 13", Id = "131465489873214" },
+    }
+
+    local CurrentIndex = 1
+    local ShuffleOn = false
+    local NowPlayingParagraph
+
+    local function OptionLabel(song)
+        return song.Name .. " (" .. song.Id .. ")"
+    end
+
+    local function UpdateNowPlaying()
+        local song = SongList[CurrentIndex]
+        if not NowPlayingParagraph then return end
+        if song then
+            local estado = MusicPlayer.Playing and "Reproduciendo" or "Pausado"
+            if MusicPlayer.SoundId == "" then
+                pcall(function()
+                    if NowPlayingParagraph.SetTitle then NowPlayingParagraph:SetTitle("Sin cancion seleccionada") end
+                    if NowPlayingParagraph.SetDesc then NowPlayingParagraph:SetDesc("Presiona Play para comenzar") end
+                end)
+            else
+                pcall(function()
+                    if NowPlayingParagraph.SetTitle then NowPlayingParagraph:SetTitle(song.Name) end
+                    if NowPlayingParagraph.SetDesc then
+                        NowPlayingParagraph:SetDesc(("%s • ID: %s • %s"):format(song.Name, song.Id, estado))
+                    end
+                end)
+            end
         end
     end
-end)
 
--- Hook: al cambiar estados criticos desde callbacks ya llaman VXS_ScheduleSave donde se añadio
--- Tambien al cerrar
-pcall(function()
-    if Window and Window.OnDestroy then
-        -- se combina abajo
+    local function LoadSong(index)
+        if not SongList[index] then return end
+        CurrentIndex = index
+        MusicPlayer:Stop()
+        MusicPlayer.SoundId = "rbxassetid://" .. SongList[index].Id
+        MusicPlayer:Play()
+        UpdateNowPlaying()
     end
-end)
+
+    local function PlaySong()
+        if MusicPlayer.SoundId == "" then
+            LoadSong(CurrentIndex)
+        elseif not MusicPlayer.Playing then
+            MusicPlayer:Resume()
+        end
+        UpdateNowPlaying()
+    end
+
+    local function PauseSong()
+        if MusicPlayer.Playing then MusicPlayer:Pause() end
+        UpdateNowPlaying()
+    end
+
+    local function StopSong()
+        MusicPlayer:Stop()
+        MusicPlayer.SoundId = ""
+        UpdateNowPlaying()
+    end
+
+    local function NextSong()
+        local nextIndex
+        if ShuffleOn then
+            nextIndex = math.random(1, #SongList)
+        else
+            nextIndex = CurrentIndex + 1
+            if nextIndex > #SongList then nextIndex = 1 end
+        end
+        LoadSong(nextIndex)
+    end
+
+    local function PrevSong()
+        local prevIndex
+        if ShuffleOn then
+            prevIndex = math.random(1, #SongList)
+        else
+            prevIndex = CurrentIndex - 1
+            if prevIndex < 1 then prevIndex = #SongList end
+        end
+        LoadSong(prevIndex)
+    end
+
+    MusicPlayer.Ended:Connect(function()
+        NextSong()
+    end)
+
+    musicTab:Section({ Title = "Ahora suena", Icon = "music" })
+    NowPlayingParagraph = musicTab:Paragraph({
+        Title = "Sin cancion seleccionada",
+        Desc = "Presiona Play para comenzar",
+        Icon = "music",
+    })
+    UpdateNowPlaying()
+
+    musicTab:Section({ Title = "Controles", Icon = "settings" })
+    musicTab:Button({
+        Title = "Anterior",
+        Desc = "Cancion previa",
+        Callback = function() PrevSong() end,
+    })
+    musicTab:Button({
+        Title = "Siguiente",
+        Desc = "Siguiente cancion",
+        Callback = function() NextSong() end,
+    })
+    musicTab:Button({
+        Title = "Play",
+        Desc = "Reproducir o reanudar",
+        Callback = function() PlaySong() end,
+    })
+    musicTab:Button({
+        Title = "Pausa",
+        Desc = "Pausar sin perder progreso",
+        Callback = function() PauseSong() end,
+    })
+    musicTab:Button({
+        Title = "Stop",
+        Desc = "Detener completamente",
+        Callback = function() StopSong() end,
+    })
+
+    musicTab:Section({ Title = "Seleccionar musica", Icon = "list" })
+    local SongDropdown
+    SongDropdown = musicTab:Dropdown({
+        Title = "Cancion",
+        Desc = "Elige una cancion de la lista (nombre + ID)",
+        Values = (function()
+            local options = {}
+            for _, song in ipairs(SongList) do
+                table.insert(options, OptionLabel(song))
+            end
+            return options
+        end)(),
+        Value = OptionLabel(SongList[1]),
+        Callback = function(selected)
+            for i, song in ipairs(SongList) do
+                if selected == OptionLabel(song) then
+                    LoadSong(i)
+                    break
+                end
+            end
+        end,
+    })
+
+    musicTab:Section({ Title = "Preferencias", Icon = "settings" })
+    musicTab:Toggle({
+        Title = "Aleatorio",
+        Desc = "Elige cancion al azar al avanzar",
+        Value = false,
+        Callback = function(state) ShuffleOn = state end,
+    })
+    musicTab:Toggle({
+        Title = "Repetir",
+        Desc = "Repite la misma cancion al terminar",
+        Value = false,
+        Callback = function(state) MusicPlayer.Looped = state end,
+    })
+    musicTab:Slider({
+        Title = "Volumen",
+        Desc = "Volumen de reproduccion",
+        Value = { Min = 0, Max = 100, Default = 50 },
+        Step = 1,
+        Callback = function(value) MusicPlayer.Volume = value / 100 end,
+    })
+
+    musicTab:Section({ Title = "Agregar por ID", Icon = "plus" })
+    local NewName, NewId = "", ""
+    musicTab:Input({
+        Title = "Nombre",
+        Placeholder = "Ej: Mi cancion",
+        Callback = function(value) NewName = value end,
+    })
+    musicTab:Input({
+        Title = "ID Roblox",
+        Placeholder = "Ej: 1234567890",
+        Callback = function(value) NewId = tostring(value or ""):gsub("%D", "") end,
+    })
+
+    local function RefreshDropdownOptions()
+        local options = {}
+        for _, song in ipairs(SongList) do
+            table.insert(options, OptionLabel(song))
+        end
+        pcall(function()
+            if SongDropdown and SongDropdown.Refresh then
+                SongDropdown:Refresh(options)
+            end
+        end)
+    end
+
+    musicTab:Button({
+        Title = "Agregar cancion",
+        Desc = "Guarda nombre e ID en la lista",
+        Callback = function()
+            if NewName ~= "" and NewId ~= "" then
+                for _, song in ipairs(SongList) do
+                    if song.Id == NewId then return end
+                end
+                table.insert(SongList, { Name = NewName, Id = NewId })
+                RefreshDropdownOptions()
+                pcall(function()
+                    if notify then
+                        notify({ Title = "Music", Content = "Agregada: " .. NewName, Duration = 2 })
+                    end
+                end)
+            end
+        end,
+    })
+end)()
+
+-- ===== GUARDADO MANUAL =====
+;(function()
+    local saveTab = Window:Tab({Title = "Guardado", Icon = "save", ShowTabTitle = true, Border = true})
+    local configFolder = "FlexusHub_DMVS_Manual"
+    pcall(function()
+        if isfolder and not isfolder(configFolder) then makefolder(configFolder) end
+    end)
+    local available = {"None"}
+    local selectedConfig = "None"
+    local customName = ""
+    local drop = saveTab:Dropdown({
+        Title = "Configuracion",
+        Values = available,
+        Value = "None",
+        Callback = function(v) selectedConfig = v end
+    })
+    local function refresh()
+        local list = {}
+        pcall(function()
+            if listfiles then
+                for _, f in ipairs(listfiles(configFolder)) do
+                    local name = tostring(f):match("([^/\\]+)%.json$")
+                    if name then table.insert(list, name) end
+                end
+            end
+        end)
+        if #list == 0 then list = {"None"} end
+        available = list
+        pcall(function() if drop.Refresh then drop:Refresh(list) end end)
+    end
+    saveTab:Button({Title = "Refrescar lista", Callback = refresh})
+    saveTab:Input({Title = "Nombre al guardar", Callback = function(v) customName = v end})
+    saveTab:Button({
+        Title = "Guardar configuracion",
+        Callback = function()
+            local name = (customName ~= "" and customName) or selectedConfig
+            if not name or name == "" or name == "None" then
+                pcall(function() if notify then notify({Title="Guardado", Content="Escribe un nombre"}) end end)
+                return
+            end
+            name = name:gsub("[^%w%s%-_]", "")
+            local data = {
+                Toggles = {
+                    SilentAim = silentAimManualEnabled,
+                    SilentFOV = silentAimFovEnabled,
+                    AutoShoot = autoShootEnabled,
+                    AutoShootAgr = autoShootAgresivoEnabled,
+                    Macro = macroActive,
+                    Trigger = dmvsAutoMacroState and dmvsAutoMacroState.Enabled,
+                    Hitbox = hitboxEnabled,
+                    ESP = espEnabled,
+                    KillAll = KillAllEnabled,
+                    KillSound = dmvsKillSoundState and dmvsKillSoundState.Enabled,
+                },
+                Values = {
+                    SilentFOVRadius = silentAimFOVRadius,
+                    HitboxSize = hitboxSizeValue,
+                    KillSound = dmvsKillSoundState and dmvsKillSoundState.Selected,
+                }
+            }
+            pcall(function()
+                if writefile and HttpService then
+                    writefile(configFolder .. "/" .. name .. ".json", HttpService:JSONEncode(data))
+                    if notify then notify({Title="Guardado", Content="OK: "..name}) end
+                    refresh()
+                end
+            end)
+        end
+    })
+    saveTab:Button({
+        Title = "Cargar configuracion",
+        Callback = function()
+            if not selectedConfig or selectedConfig == "None" then
+                pcall(function() if notify then notify({Title="Guardado", Content="Selecciona una config"}) end end)
+                return
+            end
+            local path = configFolder .. "/" .. selectedConfig .. ".json"
+            pcall(function()
+                if not (isfile and isfile(path)) then return end
+                local data = HttpService:JSONDecode(readfile(path))
+                local tg = data.Toggles or {}
+                if tg.SilentAim ~= nil then silentAimManualEnabled = tg.SilentAim end
+                if tg.SilentFOV ~= nil then silentAimFovEnabled = tg.SilentFOV end
+                if tg.AutoShoot ~= nil then autoShootEnabled = tg.AutoShoot end
+                if tg.AutoShootAgr ~= nil then autoShootAgresivoEnabled = tg.AutoShootAgr end
+                if tg.Macro ~= nil then macroActive = tg.Macro end
+                if tg.Trigger ~= nil and dmvsAutoMacroState then dmvsAutoMacroState.Enabled = tg.Trigger end
+                if tg.Hitbox ~= nil then hitboxEnabled = tg.Hitbox end
+                if tg.ESP ~= nil then espEnabled = tg.ESP end
+                if tg.KillAll ~= nil then
+                    KillAllEnabled = tg.KillAll
+                    if KillAllEnabled and KillAllInstance then KillAllInstance:Start()
+                    elseif KillAllInstance then KillAllInstance:Stop() end
+                end
+                if tg.KillSound ~= nil and dmvsKillSoundState then dmvsKillSoundState.Enabled = tg.KillSound end
+                local vl = data.Values or {}
+                if vl.SilentFOVRadius then silentAimFOVRadius = vl.SilentFOVRadius end
+                if vl.HitboxSize then hitboxSizeValue = vl.HitboxSize end
+                if vl.KillSound and dmvsKillSoundState then dmvsKillSoundState.Selected = vl.KillSound end
+                -- sync bubbles + toggle refs
+                pcall(function()
+                    if _G.VXS_UpdateBubble then
+                        _G.VXS_UpdateBubble("silent", silentAimManualEnabled)
+                        _G.VXS_UpdateBubble("auto", autoShootEnabled)
+                        _G.VXS_UpdateBubble("macro", macroActive)
+                        _G.VXS_UpdateBubble("trigger", dmvsAutoMacroState and dmvsAutoMacroState.Enabled)
+                        _G.VXS_UpdateBubble("hitbox", hitboxEnabled)
+                    end
+                end)
+                pcall(function()
+                    local refs = _G.VXS_CombatToggles or {}
+                    local map = {silent=silentAimManualEnabled, auto=autoShootEnabled, macro=macroActive,
+                        trigger=dmvsAutoMacroState and dmvsAutoMacroState.Enabled, hitbox=hitboxEnabled}
+                    for k,val in pairs(map) do
+                        local el = refs[k]
+                        if el and el.Set then pcall(function() el:Set(val) end) end
+                    end
+                end)
+                if notify then notify({Title="Guardado", Content="Cargado: "..selectedConfig}) end
+            end)
+        end
+    })
+    task.defer(refresh)
+end)()
+
 
 Window:OnDestroy(function()
+    pcall(function()
+        if Window and Window.CurrentConfig and Window.CurrentConfig.Save then
+            Window.CurrentConfig:Save()
+        end
+    end)
     pcall(vxsSaveConfig)
 
     dmvsDestroyed = true
