@@ -7225,6 +7225,7 @@ vxsIsLoadingConfig = false
     MusicPlayer.Name = "FlexusHub_MusicPlayer"
     MusicPlayer.Looped = false
     MusicPlayer.Volume = 0.5
+    MusicPlayer.SoundId = ""
     MusicPlayer.Parent = SoundService
 
     local SongList = {
@@ -7246,6 +7247,7 @@ vxsIsLoadingConfig = false
 
     local CurrentIndex = 1
     local ShuffleOn = false
+    local musicUserStarted = false -- solo suena si el usuario dio Play/Siguiente
     local NowPlayingParagraph
 
     local function OptionLabel(song)
@@ -7255,50 +7257,63 @@ vxsIsLoadingConfig = false
     local function UpdateNowPlaying()
         local song = SongList[CurrentIndex]
         if not NowPlayingParagraph then return end
-        if song then
-            local estado = MusicPlayer.Playing and "Reproduciendo" or "Pausado"
-            if MusicPlayer.SoundId == "" then
-                pcall(function()
-                    if NowPlayingParagraph.SetTitle then NowPlayingParagraph:SetTitle("Sin cancion seleccionada") end
-                    if NowPlayingParagraph.SetDesc then NowPlayingParagraph:SetDesc("Presiona Play para comenzar") end
-                end)
-            else
-                pcall(function()
-                    if NowPlayingParagraph.SetTitle then NowPlayingParagraph:SetTitle(song.Name) end
-                    if NowPlayingParagraph.SetDesc then
-                        NowPlayingParagraph:SetDesc(("%s • ID: %s • %s"):format(song.Name, song.Id, estado))
-                    end
-                end)
-            end
+        if not song then return end
+        if not musicUserStarted or MusicPlayer.SoundId == "" then
+            pcall(function()
+                if NowPlayingParagraph.SetTitle then NowPlayingParagraph:SetTitle("Sin cancion seleccionada") end
+                if NowPlayingParagraph.SetDesc then NowPlayingParagraph:SetDesc("Presiona Play o Siguiente para escuchar") end
+            end)
+            return
         end
+        local estado = MusicPlayer.Playing and "Reproduciendo" or "Pausado"
+        pcall(function()
+            if NowPlayingParagraph.SetTitle then NowPlayingParagraph:SetTitle(song.Name) end
+            if NowPlayingParagraph.SetDesc then
+                NowPlayingParagraph:SetDesc(("%s • ID: %s • %s"):format(song.Name, song.Id, estado))
+            end
+        end)
     end
 
-    local function LoadSong(index)
+    -- Solo carga ID, NO reproduce
+    local function SelectSong(index)
         if not SongList[index] then return end
         CurrentIndex = index
-        MusicPlayer:Stop()
+        UpdateNowPlaying()
+    end
+
+    -- Reproduce (solo cuando el usuario pide Play/Siguiente/Anterior)
+    local function LoadAndPlay(index)
+        if not SongList[index] then return end
+        musicUserStarted = true
+        CurrentIndex = index
+        pcall(function() MusicPlayer:Stop() end)
         MusicPlayer.SoundId = "rbxassetid://" .. SongList[index].Id
-        MusicPlayer:Play()
+        pcall(function() MusicPlayer:Play() end)
         UpdateNowPlaying()
     end
 
     local function PlaySong()
-        if MusicPlayer.SoundId == "" then
-            LoadSong(CurrentIndex)
+        musicUserStarted = true
+        if MusicPlayer.SoundId == "" or not string.find(MusicPlayer.SoundId, SongList[CurrentIndex].Id, 1, true) then
+            LoadAndPlay(CurrentIndex)
         elseif not MusicPlayer.Playing then
-            MusicPlayer:Resume()
+            pcall(function() MusicPlayer:Resume() end)
+            if not MusicPlayer.Playing then
+                pcall(function() MusicPlayer:Play() end)
+            end
         end
         UpdateNowPlaying()
     end
 
     local function PauseSong()
-        if MusicPlayer.Playing then MusicPlayer:Pause() end
+        if MusicPlayer.Playing then pcall(function() MusicPlayer:Pause() end) end
         UpdateNowPlaying()
     end
 
     local function StopSong()
-        MusicPlayer:Stop()
+        pcall(function() MusicPlayer:Stop() end)
         MusicPlayer.SoundId = ""
+        musicUserStarted = false
         UpdateNowPlaying()
     end
 
@@ -7310,7 +7325,7 @@ vxsIsLoadingConfig = false
             nextIndex = CurrentIndex + 1
             if nextIndex > #SongList then nextIndex = 1 end
         end
-        LoadSong(nextIndex)
+        LoadAndPlay(nextIndex)
     end
 
     local function PrevSong()
@@ -7321,17 +7336,20 @@ vxsIsLoadingConfig = false
             prevIndex = CurrentIndex - 1
             if prevIndex < 1 then prevIndex = #SongList end
         end
-        LoadSong(prevIndex)
+        LoadAndPlay(prevIndex)
     end
 
+    -- Solo avanza si el usuario ya puso play alguna vez
     MusicPlayer.Ended:Connect(function()
-        NextSong()
+        if musicUserStarted and not MusicPlayer.Looped then
+            NextSong()
+        end
     end)
 
     musicTab:Section({ Title = "Ahora suena", Icon = "music" })
     NowPlayingParagraph = musicTab:Paragraph({
         Title = "Sin cancion seleccionada",
-        Desc = "Presiona Play para comenzar",
+        Desc = "Presiona Play o Siguiente para escuchar",
         Icon = "music",
     })
     UpdateNowPlaying()
@@ -7339,12 +7357,12 @@ vxsIsLoadingConfig = false
     musicTab:Section({ Title = "Controles", Icon = "settings" })
     musicTab:Button({
         Title = "Anterior",
-        Desc = "Cancion previa",
+        Desc = "Cancion previa (reproduce)",
         Callback = function() PrevSong() end,
     })
     musicTab:Button({
         Title = "Siguiente",
-        Desc = "Siguiente cancion",
+        Desc = "Siguiente cancion (reproduce)",
         Callback = function() NextSong() end,
     })
     musicTab:Button({
@@ -7367,7 +7385,7 @@ vxsIsLoadingConfig = false
     local SongDropdown
     SongDropdown = musicTab:Dropdown({
         Title = "Cancion",
-        Desc = "Elige una cancion de la lista (nombre + ID)",
+        Desc = "Elige cancion (NO reproduce hasta Play/Siguiente)",
         Values = (function()
             local options = {}
             for _, song in ipairs(SongList) do
@@ -7377,9 +7395,10 @@ vxsIsLoadingConfig = false
         end)(),
         Value = OptionLabel(SongList[1]),
         Callback = function(selected)
+            -- Solo selecciona, no reproduce al abrir el script ni al elegir
             for i, song in ipairs(SongList) do
                 if selected == OptionLabel(song) then
-                    LoadSong(i)
+                    SelectSong(i)
                     break
                 end
             end
