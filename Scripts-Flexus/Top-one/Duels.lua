@@ -7723,6 +7723,12 @@ end)
             PlaceId = 107778070777162,
             GameId = nil,
         },
+        {
+            Name = "Survival Disaster",
+            Desc = "Natural Disaster Survival · fly, aura de items y utilidades.",
+            PlaceId = 189707,
+            GameId = nil,
+        },
     }
 
     local function isCurrentGame(g)
