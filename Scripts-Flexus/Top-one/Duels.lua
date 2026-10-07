@@ -1,5 +1,4 @@
 
-
 local WindUI
 do
     local urls = {
@@ -7702,35 +7701,27 @@ end)
 -- EXTRA: Externo + Juegos compatibles
 -- ==========================================
 ;(function()
-    local TeleportService = game:GetService("TeleportService")
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
-
     local BASE_SCRIPTS = "https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/Scripts-Flexus/Top-one/"
     local AVATAR_URL = BASE_SCRIPTS .. "AvatarCopier.lua"
 
-    -- PlaceIds conocidos (Duels por GameId para cubrir todos los modos)
     local GAMES = {
         {
             Name = "Duels",
-            Desc = "Asesinos VS Sheriffs",
+            Desc = "Asesinos VS Sheriffs · combate, ESP, farm y más.",
             PlaceId = 135856908115931,
             GameId = 7219654364,
-            File = "Duels.lua",
         },
         {
             Name = "MM2",
-            Desc = "Murder Mystery 2",
+            Desc = "Murder Mystery 2 · roles, farm y utilidades.",
             PlaceId = 142823291,
             GameId = nil,
-            File = "MM2.lua",
         },
         {
             Name = "Steal an Egg",
-            Desc = "Steal an Egg",
+            Desc = "Steal an Egg · farm, steal y herramientas.",
             PlaceId = 107778070777162,
             GameId = nil,
-            File = "StealAnEgg.lua",
         },
     }
 
@@ -7763,95 +7754,6 @@ end)
         end)
     end
 
-    local function queueScript(fileName)
-        local queue = queue_on_teleport
-            or (syn and syn.queue_on_teleport)
-            or (fluxus and fluxus.queue_on_teleport)
-            or queueonteleport
-        if not queue then
-            return false
-        end
-        local url = BASE_SCRIPTS .. fileName
-        local code = [[
-            if not game:IsLoaded() then game.Loaded:Wait() end
-            task.wait(2)
-            local ok, err = pcall(function()
-                loadstring(game:HttpGet("]] .. url .. [["))()
-            end)
-            if not ok then
-                warn("[FlexusHub] Error al cargar script tras teleport:", err)
-            end
-        ]]
-        local ok = pcall(function()
-            queue(code)
-        end)
-        return ok
-    end
-
-    local function teleportTo(g)
-        if isCurrentGame(g) then
-            safeNotify("Juegos", "Ya estás en " .. g.Name .. ". Opción bloqueada.")
-            return
-        end
-
-        local placeId = tonumber(g.PlaceId)
-        if not placeId then
-            safeNotify("Juegos", "PlaceId inválido para " .. tostring(g.Name))
-            return
-        end
-
-        safeNotify("Juegos", "Teletransportando a " .. g.Name .. " (ID " .. tostring(placeId) .. ")...")
-
-        -- Cola el script ANTES del teleport (si el ejecutor lo soporta)
-        local queued = queueScript(g.File)
-        if not queued then
-            safeNotify("Juegos", "Sin queue_on_teleport: al llegar ejecuta el loader o el script del juego.")
-        end
-
-        task.spawn(function()
-            task.wait(0.35)
-            local ts = TeleportService
-            local lp = LocalPlayer
-            local lastErr = nil
-            local ok = false
-
-            -- 1) Teleport clásico con jugador
-            ok, lastErr = pcall(function()
-                ts:Teleport(placeId, lp)
-            end)
-            if ok then return end
-
-            -- 2) Solo PlaceId
-            ok, lastErr = pcall(function()
-                ts:Teleport(placeId)
-            end)
-            if ok then return end
-
-            -- 3) TeleportAsync (API nueva)
-            ok, lastErr = pcall(function()
-                ts:TeleportAsync(placeId, { lp })
-            end)
-            if ok then return end
-
-            -- 4) Algunos ejecutores exponen teleport custom
-            ok, lastErr = pcall(function()
-                if syn and syn.queue_on_teleport then
-                    -- ya encolamos el script arriba
-                end
-                if teleport then
-                    teleport(placeId)
-                elseif Teleport then
-                    Teleport(placeId)
-                else
-                    error(tostring(lastErr) or "Teleport falló")
-                end
-            end)
-            if ok then return end
-
-            safeNotify("Juegos", "No se pudo teletransportar a " .. tostring(placeId) .. ": " .. tostring(lastErr))
-        end)
-    end
-
     local extraTab = Window:Tab({
         Title = "Extra",
         Icon = "package",
@@ -7864,7 +7766,7 @@ end)
 
     extraTab:Paragraph({
         Title = "Herramientas externas",
-        Desc = "Scripts y utilidades que se cargan aparte del hub de Duels.",
+        Desc = "Utilidades que se cargan aparte del hub de Duels.",
     })
 
     extraTab:Button({
@@ -7887,39 +7789,28 @@ end)
         end,
     })
 
-    -- ----- Juegos compatibles -----
+    -- ----- Juegos compatibles (solo lista informativa) -----
     extraTab:Divider()
     extraTab:Section({ Title = "Juegos compatibles", Icon = "gamepad-2" })
 
     extraTab:Paragraph({
         Title = "Juego actual",
-        Desc = "Estás en: " .. currentGameName() .. " (PlaceId " .. tostring(game.PlaceId) .. ").\n"
-            .. "Si eliges otro juego, te teletransportará y ejecutará el script correspondiente.",
+        Desc = "Estás en: " .. currentGameName() .. ".\n"
+            .. "FlexusHub tiene script propio para los juegos de la lista. Usa el loader para cargarlos.",
     })
 
     for _, g in ipairs(GAMES) do
         local here = isCurrentGame(g)
         local title = g.Name
-        local desc
-        local locked = false
+        local desc = g.Desc
         if here then
             title = g.Name .. " (actual)"
-            desc = "Ya estás en este juego. No puedes teletransportarte aquí otra vez."
-            locked = true
-        else
-            desc = g.Desc .. " · Teleport + cargar " .. g.File
+            desc = g.Desc .. " · Estás en este juego ahora."
         end
 
-        extraTab:Button({
+        extraTab:Paragraph({
             Title = title,
             Desc = desc,
-            Callback = function()
-                if isCurrentGame(g) or locked then
-                    safeNotify("Juegos", "Ya estás en " .. g.Name .. ". Opción bloqueada.")
-                    return
-                end
-                teleportTo(g)
-            end,
         })
     end
 end)()
