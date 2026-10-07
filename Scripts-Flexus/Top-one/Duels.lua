@@ -1,4 +1,5 @@
 
+
 local WindUI
 do
     local urls = {
@@ -7792,19 +7793,62 @@ end)
             safeNotify("Juegos", "Ya estás en " .. g.Name .. ". Opción bloqueada.")
             return
         end
-        safeNotify("Juegos", "Teletransportando a " .. g.Name .. "...")
+
+        local placeId = tonumber(g.PlaceId)
+        if not placeId then
+            safeNotify("Juegos", "PlaceId inválido para " .. tostring(g.Name))
+            return
+        end
+
+        safeNotify("Juegos", "Teletransportando a " .. g.Name .. " (ID " .. tostring(placeId) .. ")...")
+
+        -- Cola el script ANTES del teleport (si el ejecutor lo soporta)
         local queued = queueScript(g.File)
         if not queued then
-            safeNotify("Juegos", "Tu ejecutor no soporta queue_on_teleport. Se intentará el teleport sin auto-cargar.")
+            safeNotify("Juegos", "Sin queue_on_teleport: al llegar ejecuta el loader o el script del juego.")
         end
+
         task.spawn(function()
-            task.wait(0.4)
-            local ok, err = pcall(function()
-                TeleportService:Teleport(g.PlaceId, LocalPlayer)
+            task.wait(0.35)
+            local ts = TeleportService
+            local lp = LocalPlayer
+            local lastErr = nil
+            local ok = false
+
+            -- 1) Teleport clásico con jugador
+            ok, lastErr = pcall(function()
+                ts:Teleport(placeId, lp)
             end)
-            if not ok then
-                safeNotify("Juegos", "No se pudo teletransportar: " .. tostring(err))
-            end
+            if ok then return end
+
+            -- 2) Solo PlaceId
+            ok, lastErr = pcall(function()
+                ts:Teleport(placeId)
+            end)
+            if ok then return end
+
+            -- 3) TeleportAsync (API nueva)
+            ok, lastErr = pcall(function()
+                ts:TeleportAsync(placeId, { lp })
+            end)
+            if ok then return end
+
+            -- 4) Algunos ejecutores exponen teleport custom
+            ok, lastErr = pcall(function()
+                if syn and syn.queue_on_teleport then
+                    -- ya encolamos el script arriba
+                end
+                if teleport then
+                    teleport(placeId)
+                elseif Teleport then
+                    Teleport(placeId)
+                else
+                    error(tostring(lastErr) or "Teleport falló")
+                end
+            end)
+            if ok then return end
+
+            safeNotify("Juegos", "No se pudo teletransportar a " .. tostring(placeId) .. ": " .. tostring(lastErr))
         end)
     end
 
@@ -7866,22 +7910,17 @@ end)
             desc = g.Desc .. " · Teleport + cargar " .. g.File
         end
 
-        local btnOpts = {
+        extraTab:Button({
             Title = title,
             Desc = desc,
             Callback = function()
-                if isCurrentGame(g) then
+                if isCurrentGame(g) or locked then
                     safeNotify("Juegos", "Ya estás en " .. g.Name .. ". Opción bloqueada.")
                     return
                 end
                 teleportTo(g)
             end,
-        }
-        -- Si WindUI soporta Locked, bloquear la opción del juego actual
-        if locked then
-            btnOpts.Locked = true
-        end
-        extraTab:Button(btnOpts)
+        })
     end
 end)()
 
