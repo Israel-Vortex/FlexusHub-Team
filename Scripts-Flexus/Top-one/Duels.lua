@@ -7696,6 +7696,197 @@ end)
 
 
 
+
+-- ==========================================
+-- EXTRA: Externo + Juegos compatibles
+-- ==========================================
+;(function()
+    local TeleportService = game:GetService("TeleportService")
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+
+    local BASE_SCRIPTS = "https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/Scripts-Flexus/Top-one/"
+    local AVATAR_URL = BASE_SCRIPTS .. "AvatarCopier.lua"
+
+    -- PlaceIds conocidos (Duels por GameId para cubrir todos los modos)
+    local GAMES = {
+        {
+            Name = "Duels",
+            Desc = "Asesinos VS Sheriffs",
+            PlaceId = 135856908115931,
+            GameId = 7219654364,
+            File = "Duels.lua",
+        },
+        {
+            Name = "MM2",
+            Desc = "Murder Mystery 2",
+            PlaceId = 142823291,
+            GameId = nil,
+            File = "MM2.lua",
+        },
+        {
+            Name = "Steal an Egg",
+            Desc = "Steal an Egg",
+            PlaceId = 107778070777162,
+            GameId = nil,
+            File = "StealAnEgg.lua",
+        },
+    }
+
+    local function isCurrentGame(g)
+        if g.GameId and tonumber(game.GameId) == tonumber(g.GameId) then
+            return true
+        end
+        if tonumber(game.PlaceId) == tonumber(g.PlaceId) then
+            return true
+        end
+        return false
+    end
+
+    local function currentGameName()
+        for _, g in ipairs(GAMES) do
+            if isCurrentGame(g) then
+                return g.Name
+            end
+        end
+        return "Desconocido"
+    end
+
+    local function safeNotify(title, content)
+        pcall(function()
+            if type(notify) == "function" then
+                notify({ Title = title, Content = content, Duration = 3 })
+            elseif WindUI and WindUI.Notify then
+                WindUI:Notify({ Title = title, Content = content, Duration = 3 })
+            end
+        end)
+    end
+
+    local function queueScript(fileName)
+        local queue = queue_on_teleport
+            or (syn and syn.queue_on_teleport)
+            or (fluxus and fluxus.queue_on_teleport)
+            or queueonteleport
+        if not queue then
+            return false
+        end
+        local url = BASE_SCRIPTS .. fileName
+        local code = [[
+            if not game:IsLoaded() then game.Loaded:Wait() end
+            task.wait(2)
+            local ok, err = pcall(function()
+                loadstring(game:HttpGet("]] .. url .. [["))()
+            end)
+            if not ok then
+                warn("[FlexusHub] Error al cargar script tras teleport:", err)
+            end
+        ]]
+        local ok = pcall(function()
+            queue(code)
+        end)
+        return ok
+    end
+
+    local function teleportTo(g)
+        if isCurrentGame(g) then
+            safeNotify("Juegos", "Ya estás en " .. g.Name .. ". Opción bloqueada.")
+            return
+        end
+        safeNotify("Juegos", "Teletransportando a " .. g.Name .. "...")
+        local queued = queueScript(g.File)
+        if not queued then
+            safeNotify("Juegos", "Tu ejecutor no soporta queue_on_teleport. Se intentará el teleport sin auto-cargar.")
+        end
+        task.spawn(function()
+            task.wait(0.4)
+            local ok, err = pcall(function()
+                TeleportService:Teleport(g.PlaceId, LocalPlayer)
+            end)
+            if not ok then
+                safeNotify("Juegos", "No se pudo teletransportar: " .. tostring(err))
+            end
+        end)
+    end
+
+    local extraTab = Window:Tab({
+        Title = "Extra",
+        Icon = "package",
+        ShowTabTitle = true,
+        Border = true,
+    })
+
+    -- ----- Externo -----
+    extraTab:Section({ Title = "Externo", Icon = "external-link" })
+
+    extraTab:Paragraph({
+        Title = "Herramientas externas",
+        Desc = "Scripts y utilidades que se cargan aparte del hub de Duels.",
+    })
+
+    extraTab:Button({
+        Title = "Avatar Copier",
+        Desc = "Abre FlexusHub Avatar Copi en este servidor (copiar, guardar y restaurar avatares).",
+        Callback = function()
+            safeNotify("Externo", "Cargando Avatar Copier...")
+            task.spawn(function()
+                local ok, err = pcall(function()
+                    local src = game:HttpGet(AVATAR_URL)
+                    loadstring(src)()
+                end)
+                if not ok then
+                    safeNotify("Externo", "No se pudo cargar Avatar Copier. Sube AvatarCopier.lua al repositorio.")
+                    warn("[FlexusHub] AvatarCopier:", err)
+                else
+                    safeNotify("Externo", "Avatar Copier listo.")
+                end
+            end)
+        end,
+    })
+
+    -- ----- Juegos compatibles -----
+    extraTab:Divider()
+    extraTab:Section({ Title = "Juegos compatibles", Icon = "gamepad-2" })
+
+    extraTab:Paragraph({
+        Title = "Juego actual",
+        Desc = "Estás en: " .. currentGameName() .. " (PlaceId " .. tostring(game.PlaceId) .. ").\n"
+            .. "Si eliges otro juego, te teletransportará y ejecutará el script correspondiente.",
+    })
+
+    for _, g in ipairs(GAMES) do
+        local here = isCurrentGame(g)
+        local title = g.Name
+        local desc
+        local locked = false
+        if here then
+            title = g.Name .. " (actual)"
+            desc = "Ya estás en este juego. No puedes teletransportarte aquí otra vez."
+            locked = true
+        else
+            desc = g.Desc .. " · Teleport + cargar " .. g.File
+        end
+
+        local btnOpts = {
+            Title = title,
+            Desc = desc,
+            Callback = function()
+                if isCurrentGame(g) then
+                    safeNotify("Juegos", "Ya estás en " .. g.Name .. ". Opción bloqueada.")
+                    return
+                end
+                teleportTo(g)
+            end,
+        }
+        -- Si WindUI soporta Locked, bloquear la opción del juego actual
+        if locked then
+            btnOpts.Locked = true
+        end
+        extraTab:Button(btnOpts)
+    end
+end)()
+
+
+
 -- ==========================================
 -- AUTO REJOIN / SERVER HOP: re-ejecutar script
 -- ==========================================
