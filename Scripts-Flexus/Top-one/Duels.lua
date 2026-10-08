@@ -6425,488 +6425,626 @@ end
 
 
 -- ==========================================
--- MOVEMENT TAB (VXS) - Speed / Fly / Inf Jump / Tela / Noclip
+-- MOVEMENT TAB (protegido: spoof WalkSpeed / CanCollide / JumpPower)
 -- ==========================================
+do
+    local spoofedWalkSpeeds = {}
+    local spoofedCanCollide = {}
+    local spoofedJumpPowers = {}
 
--- Movement helpers (spoof WalkSpeed + random names)
-local spoofedWalkSpeeds = spoofedWalkSpeeds or {}
-local function _gameLikeName()
-    local prefixes = { "Core", "Player", "Camera", "Input", "Render", "UI", "Hud", "Badge", "Prompt" }
-    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    local s = prefixes[math.random(1, #prefixes)]
-    for _ = 1, 8 do
-        local i = math.random(1, #chars)
-        s = s .. chars:sub(i, i)
+    local function _moveRandName()
+        local prefixes = { "Humanoid", "Root", "Animate", "Health", "Status", "Body", "Motor", "Joint", "Accessory" }
+        local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        local s = prefixes[math.random(1, #prefixes)]
+        for _ = 1, 10 do
+            s = s .. chars:sub(math.random(1, #chars), math.random(1, #chars))
+        end
+        return s
     end
-    return s
-end
--- WalkSpeed index spoof (solo lectura protegida si hay metamethods)
-pcall(function()
-    if not getgenv().FlexusWalkSpeedHook then
-        getgenv().FlexusWalkSpeedHook = true
-        if hookmetamethod and newcclosure then
-            local oldIndex
-            oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
-                if key == "WalkSpeed" and spoofedWalkSpeeds[self] ~= nil and not checkcaller() then
-                    return spoofedWalkSpeeds[self]
+
+    -- Spoof de lecturas del anti-cheat (solo cuando NO es checkcaller)
+    pcall(function()
+        if getgenv().FlexusMoveSpoofInstalled then return end
+        getgenv().FlexusMoveSpoofInstalled = true
+        if not checkcaller then return end
+
+        local function installIndex(oldIndex)
+            local function wrap(self, key)
+                if not checkcaller() then
+                    if key == "WalkSpeed" and spoofedWalkSpeeds[self] ~= nil then
+                        return spoofedWalkSpeeds[self]
+                    end
+                    if key == "JumpPower" and spoofedJumpPowers[self] ~= nil then
+                        return spoofedJumpPowers[self]
+                    end
+                    if key == "JumpHeight" and spoofedJumpPowers[self] ~= nil then
+                        return 7.2
+                    end
+                    if key == "CanCollide" and spoofedCanCollide[self] ~= nil then
+                        return spoofedCanCollide[self]
+                    end
+                    if key == "PlatformStand" then
+                        -- no revelar PlatformStand de fly a scanners externos
+                        local ok, v = pcall(oldIndex, self, key)
+                        if ok and v == true and moveFlyEnabled then
+                            return false
+                        end
+                    end
                 end
+                return oldIndex(self, key)
+            end
+            if newcclosure then
+                return newcclosure(wrap)
+            end
+            return wrap
+        end
+
+        if getrawmetatable and setreadonly then
+            local gm = getrawmetatable(game)
+            local oldIndex = gm.__index
+            setreadonly(gm, false)
+            gm.__index = installIndex(oldIndex)
+            setreadonly(gm, true)
+        elseif hookmetamethod then
+            local oldIndex
+            oldIndex = hookmetamethod(game, "__index", installIndex(function(self, key)
                 return oldIndex(self, key)
             end))
         end
-    end
-end)
-
--- MOVEMENT TAB (Popular) - Speed / Fly / Inf Jump con spoof
--- ==========================================
-local movementTab = Window:Tab({ Title = "Movement", Icon = "zap", ShowTabTitle = true, Border = true })
-
-local moveSpeedEnabled = false
-local moveSpeedValue = 28
-local moveFlyEnabled = false
-local moveFlySpeed = 80
-local moveInfJumpEnabled = false
-local moveNoclipEnabled = false
-local moveNoclipConn = nil
-local moveSpeedGlitchEnabled = false
-local moveSpeedGlitchConn = nil
-local moveGlitchJumpConn = nil
-local moveFlyBV, moveFlyBG = nil, nil
-local moveConns = {}
-
-local function moveGetChar()
-    return player.Character
-end
-
-local function moveGetHum()
-    local c = moveGetChar()
-    return c and c:FindFirstChildOfClass("Humanoid")
-end
-
-local function moveGetRoot()
-    local c = moveGetChar()
-    return c and c:FindFirstChild("HumanoidRootPart")
-end
-
-local function setProtectedWalkSpeed(hum, realSpeed)
-    if not hum then return end
-    -- Valor real alto; a scripts/AC que lean sin checkcaller les devolvemos 16
-    if not spoofedWalkSpeeds[hum] then
-        spoofedWalkSpeeds[hum] = 16
-    end
-    pcall(function()
-        hum.WalkSpeed = realSpeed
     end)
-end
 
-local function clearWalkSpeedSpoof(hum)
-    if hum and spoofedWalkSpeeds[hum] then
+    local movementTab = Window:Tab({ Title = "Movement", Icon = "zap", ShowTabTitle = true, Border = true })
+
+    local moveSpeedEnabled = false
+    local moveSpeedValue = 28
+    local moveFlyEnabled = false
+    local moveFlySpeed = 50
+    local moveInfJumpEnabled = false
+    local moveNoclipEnabled = false
+    local moveNoclipConn = nil
+    local moveSpeedGlitchEnabled = false
+    local moveSpeedGlitchConn = nil
+    local moveGlitchJumpConn = nil
+    local moveFlyConn = nil
+    local moveSpeedConn = nil
+    local moveFlyBV, moveFlyBG = nil, nil
+    local moveConns = {}
+
+    -- forward declare for spoof PlatformStand
+    moveFlyEnabled = false
+
+    local function moveGetChar()
+        return player.Character
+    end
+
+    local function moveGetHum()
+        local c = moveGetChar()
+        return c and c:FindFirstChildOfClass("Humanoid")
+    end
+
+    local function moveGetRoot()
+        local c = moveGetChar()
+        return c and c:FindFirstChild("HumanoidRootPart")
+    end
+
+    local function setProtectedWalkSpeed(hum, realSpeed)
+        if not hum then return end
+        -- AC lee 16; el valor real se aplica igual
+        spoofedWalkSpeeds[hum] = 16
+        pcall(function()
+            hum.WalkSpeed = realSpeed
+        end)
+    end
+
+    local function clearWalkSpeedSpoof(hum)
+        if not hum then return end
         spoofedWalkSpeeds[hum] = nil
         pcall(function()
-            if hum.Parent then hum.WalkSpeed = 16 end
+            if hum.Parent then
+                hum.WalkSpeed = 16
+            end
         end)
     end
-end
 
-local function stopFlyMovers()
-    if moveFlyBV then pcall(function() moveFlyBV:Destroy() end) moveFlyBV = nil end
-    if moveFlyBG then pcall(function() moveFlyBG:Destroy() end) moveFlyBG = nil end
-    local hum = moveGetHum()
-    if hum then
+    local function setProtectedJumpPower(hum, realPower)
+        if not hum then return end
+        spoofedJumpPowers[hum] = 50
         pcall(function()
-            hum.PlatformStand = false
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            if hum.UseJumpPower ~= nil then
+                hum.UseJumpPower = true
+            end
+            hum.JumpPower = realPower
         end)
     end
-end
 
-local function startFlyMovers()
-    stopFlyMovers()
-    local root = moveGetRoot()
-    if not root then return end
-    local ok = pcall(function()
-        local bv = Instance.new("BodyVelocity")
-        bv.Name = _gameLikeName()
-        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-        bv.Velocity = Vector3.zero
-        bv.Parent = root
-        moveFlyBV = bv
-        local bg = Instance.new("BodyGyro")
-        bg.Name = _gameLikeName()
-        bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-        bg.P = 9e4
-        bg.CFrame = root.CFrame
-        bg.Parent = root
-        moveFlyBG = bg
-    end)
-    if not ok then stopFlyMovers() end
-end
-
-movementTab:Section({ Title = "Movimiento protegido" })
-movementTab:Paragraph({
-    Title = "Aviso",
-    Desc = "Speed usa spoof de WalkSpeed. Fly e Inf Jump usan nombres random. Aun asi el server puede detectar movimiento raro."
-})
-
--- Movimiento Tela: va donde apunta el joystick pero con inclinacion/strafe exagerado
-local telaEnabled = false
-local telaSpeed = 42
-local telaLean = 0
-local telaConn = nil
-local telaRenderConn = nil
-
-local function stopTela()
-    if telaConn then
-        pcall(function() telaConn:Disconnect() end)
-        telaConn = nil
+    local function clearJumpSpoof(hum)
+        if not hum then return end
+        spoofedJumpPowers[hum] = nil
+        pcall(function()
+            if hum.Parent then
+                hum.JumpPower = 50
+            end
+        end)
     end
-    if telaRenderConn then
-        pcall(function() telaRenderConn:Disconnect() end)
-        telaRenderConn = nil
-    end
-    telaLean = 0
-    pcall(function()
-        local char = player.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root and root.Parent then
-            -- no forzar CFrame raro al apagar
+
+    local function stopFlyMovers()
+        if moveFlyConn then
+            pcall(function() moveFlyConn:Disconnect() end)
+            moveFlyConn = nil
         end
-    end)
-end
-
-local function startTela()
-    stopTela()
-    -- Heartbeat: empuje fuerte hacia MoveDirection (joystick)
-    telaConn = RunService.Heartbeat:Connect(function(dt)
-        if not telaEnabled then return end
-        local char = player.Character
-        if not char then return end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not hum or not root or hum.Health <= 0 then return end
-        if hum.Sit or hum.PlatformStand then return end
-
-        local move = hum.MoveDirection
-        if move.Magnitude < 0.05 then
-            -- frenado suave
-            local vel = root.AssemblyLinearVelocity
-            root.AssemblyLinearVelocity = Vector3.new(vel.X * 0.86, vel.Y, vel.Z * 0.86)
-            telaLean = telaLean * 0.85
-            return
+        if moveFlyBV then
+            pcall(function() moveFlyBV:Destroy() end)
+            moveFlyBV = nil
         end
-
-        local dir = move.Unit
-        local target = dir * telaSpeed
-        local vel = root.AssemblyLinearVelocity
-        local blend = math.clamp(dt * 16, 0, 1)
-        -- empuje agresivo (se siente que "tira" mucho)
-        local nx = vel.X + (target.X - vel.X) * blend
-        local nz = vel.Z + (target.Z - vel.Z) * blend
-        -- boost extra para que se note el desplazamiento
-        nx = nx + dir.X * (telaSpeed * 0.12)
-        nz = nz + dir.Z * (telaSpeed * 0.12)
-        root.AssemblyLinearVelocity = Vector3.new(nx, vel.Y, nz)
-
-        -- lean lateral: cruza el vector de movimiento con up para inclinarse de lado
-        local side = dir:Cross(Vector3.yAxis)
-        if side.Magnitude > 0.01 then
-            side = side.Unit
-            local sideAmt = math.clamp(dir:Dot(root.CFrame.RightVector), -1, 1)
-            telaLean = telaLean + (sideAmt - telaLean) * math.clamp(dt * 10, 0, 1)
-        else
-            telaLean = telaLean * 0.9
+        if moveFlyBG then
+            pcall(function() moveFlyBG:Destroy() end)
+            moveFlyBG = nil
         end
-    end)
-
-    -- Render: inclina el personaje hacia un lado mientras avanza (look hacia el joystick)
-    telaRenderConn = RunService.RenderStepped:Connect(function(dt)
-        if not telaEnabled then return end
-        local char = player.Character
-        if not char then return end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not hum or not root or hum.Health <= 0 then return end
-        if hum.Sit or hum.PlatformStand then return end
-
-        local move = hum.MoveDirection
-        if move.Magnitude < 0.08 then return end
-
-        local dir = Vector3.new(move.X, 0, move.Z)
-        if dir.Magnitude < 0.05 then return end
-        dir = dir.Unit
-
-        -- mira hacia donde apunta el joystick
-        local lookCF = CFrame.new(root.Position, root.Position + dir)
-        -- inclina el torso visualmente (roll) hacia el lado del strafe
-        local leanAngle = math.rad(-18 * telaLean) -- se ve cargado a un lado
-        local tilt = CFrame.Angles(math.rad(-6), 0, leanAngle) -- leve hacia adelante + roll
-        root.CFrame = lookCF * tilt
-    end)
-end
-
-movementTab:Toggle({
-    Flag = "Movimiento_Tela",
-    Title = "Movimiento Tela",
-    Desc = "Vas donde apunta el joystick con empuje fuerte e inclinacion lateral (estilo tela).",
-    Default = false,
-    Callback = function(state)
-        telaEnabled = state and true or false
-        if state then
-            startTela()
-            pcall(function() notify({ Title = "Movement", Content = "Movimiento Tela: ON", Duration = 2 }) end)
-        else
-            stopTela()
-            pcall(function() notify({ Title = "Movement", Content = "Movimiento Tela: OFF", Duration = 2 }) end)
-        end
-    end
-})
-
-movementTab:Slider({
-    Flag = "Velocidad_Tela",
-    Title = "Velocidad Tela",
-    Desc = "Que tan fuerte empuja el movimiento tela.",
-    Value = { Min = 24, Max = 80, Default = 42 },
-    Callback = function(v)
-        telaSpeed = tonumber(v) or 42
-    end
-})
-
-
-movementTab:Toggle({
-    Flag = "Velocidad_Speed",
-    Title = "Velocidad (Speed)",
-    Desc = "Aumenta tu velocidad de movimiento (con spoof anti-deteccion).",
-    Default = false,
-    Callback = function(state)
-        moveSpeedEnabled = state
         local hum = moveGetHum()
-        if state then
-            -- apaga glitch para no chocar
-            if moveSpeedGlitchEnabled then
-                moveSpeedGlitchEnabled = false
-                if moveSpeedGlitchConn then moveSpeedGlitchConn:Disconnect(); moveSpeedGlitchConn = nil end
-                if moveGlitchJumpConn then moveGlitchJumpConn:Disconnect(); moveGlitchJumpConn = nil end
+        if hum then
+            pcall(function()
+                hum.PlatformStand = false
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end)
+        end
+        local root = moveGetRoot()
+        if root then
+            pcall(function()
+                root.AssemblyLinearVelocity = Vector3.new(
+                    root.AssemblyLinearVelocity.X,
+                    math.min(root.AssemblyLinearVelocity.Y, 0),
+                    root.AssemblyLinearVelocity.Z
+                )
+            end)
+        end
+    end
+
+    -- Fly sin BodyVelocity permanente: velocity directa en HRP (menos huella)
+    local function startFlyMovers()
+        stopFlyMovers()
+        local root = moveGetRoot()
+        local hum = moveGetHum()
+        if not root or not hum then return end
+
+        pcall(function()
+            hum.PlatformStand = true
+        end)
+
+        -- Body movers solo si hace falta estabilizar; nombres random tipo engine
+        pcall(function()
+            local bv = Instance.new("BodyVelocity")
+            bv.Name = _moveRandName()
+            bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+            bv.P = 1250
+            bv.Velocity = Vector3.zero
+            bv.Parent = root
+            moveFlyBV = bv
+
+            local bg = Instance.new("BodyGyro")
+            bg.Name = _moveRandName()
+            bg.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+            bg.P = 3000
+            bg.D = 500
+            bg.CFrame = root.CFrame
+            bg.Parent = root
+            moveFlyBG = bg
+        end)
+
+        moveFlyConn = RunService.RenderStepped:Connect(function()
+            if not moveFlyEnabled then return end
+            local root2 = moveGetRoot()
+            local hum2 = moveGetHum()
+            if not root2 then return end
+            if hum2 then
+                pcall(function() hum2.PlatformStand = true end)
             end
-            setProtectedWalkSpeed(hum, moveSpeedValue)
-        else
-            clearWalkSpeedSpoof(hum)
+            if moveFlyBV and moveFlyBV.Parent ~= root2 then
+                pcall(function() moveFlyBV.Parent = root2 end)
+            end
+            if moveFlyBG and moveFlyBG.Parent ~= root2 then
+                pcall(function() moveFlyBG.Parent = root2 end)
+            end
+
+            local cam = workspace.CurrentCamera
+            if not cam then return end
+
+            local dir = Vector3.zero
+            local focused = UserInputService:GetFocusedTextBox()
+            if not focused then
+                -- PC
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.yAxis end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                    dir = dir - Vector3.yAxis
+                end
+                -- Movil: Humanoid.MoveDirection
+                if hum2 and hum2.MoveDirection.Magnitude > 0.05 then
+                    local md = hum2.MoveDirection
+                    dir = dir + Vector3.new(md.X, 0, md.Z)
+                end
+            end
+
+            local vel
+            if dir.Magnitude > 0.08 then
+                vel = dir.Unit * moveFlySpeed
+            else
+                vel = Vector3.zero
+            end
+
+            if moveFlyBV and moveFlyBV.Parent then
+                moveFlyBV.Velocity = vel
+            else
+                -- fallback sin BodyVelocity
+                root2.AssemblyLinearVelocity = vel
+            end
+            if moveFlyBG and moveFlyBG.Parent then
+                local flat = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)
+                if flat.Magnitude > 0.05 then
+                    moveFlyBG.CFrame = CFrame.lookAt(root2.Position, root2.Position + flat)
+                end
+            end
+        end)
+    end
+
+    local function stopNoclip()
+        if moveNoclipConn then
+            pcall(function() moveNoclipConn:Disconnect() end)
+            moveNoclipConn = nil
         end
-        pcall(function() notify({ Title = "Movement", Content = tostring(state and ("Speed ON: " .. tostring(moveSpeedValue), Duration = 2 }) end)) or "Speed OFF")
-    end
-})
-
-movementTab:Slider({
-    Flag = "Valor_de_velocidad",
-    Title = "Valor de velocidad",
-    Desc = "Que tan rapido te mueves con Speed activo.",
-    Value = { Min = 16, Max = 120, Default = 28 },
-    Callback = function(v)
-        moveSpeedValue = v
-        if moveSpeedEnabled then
-            setProtectedWalkSpeed(moveGetHum(), moveSpeedValue)
-        end
-    end
-})
-
-movementTab:Toggle({
-    Flag = "Vuelo_Fly",
-    Title = "Vuelo (Fly)",
-    Desc = "Te permite volar libremente por el mapa.",
-    Default = false,
-    Callback = function(state)
-        moveFlyEnabled = state
-        if state then
-            startFlyMovers()
-        else
-            stopFlyMovers()
-        end
-        pcall(function() notify({ Title = "Movement", Content = tostring(state and "Fly ON" or "Fly OFF"), Duration = 2 }) end)
-    end
-})
-
-movementTab:Slider({
-    Flag = "Velocidad_de_vuelo",
-    Title = "Velocidad de vuelo",
-    Desc = "Velocidad al usar Fly.",
-    Value = { Min = 20, Max = 250, Default = 80 },
-    Callback = function(v)
-        moveFlySpeed = v
-    end
-})
-
-movementTab:Toggle({
-    Flag = "Salto_infinito",
-    Title = "Salto infinito",
-    Desc = "Puedes saltar sin limite en el aire.",
-    Default = false,
-    Callback = function(state)
-        moveInfJumpEnabled = state
-        pcall(function() notify({ Title = "Movement", Content = tostring(state and "Inf Jump ON" or "Inf Jump OFF"), Duration = 2 }) end)
-    end
-})
-
--- Noclip
-movementTab:Toggle({
-    Flag = "Noclip",
-    Title = "Noclip",
-    Desc = "Atraviesa paredes y objetos del mapa.",
-    Default = false,
-    Callback = function(state)
-        moveNoclipEnabled = state
-        if state then
-            if not moveNoclipConn then
-                moveNoclipConn = RunService.Stepped:Connect(function()
-                    if not moveNoclipEnabled then return end
-                    local char = moveGetChar()
-                    if not char then return end
-                    for _, part in pairs(char:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
-                        end
+        local char = moveGetChar()
+        if char then
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    if spoofedCanCollide[part] ~= nil then
+                        pcall(function()
+                            part.CanCollide = spoofedCanCollide[part]
+                        end)
+                        spoofedCanCollide[part] = nil
                     end
+                end
+            end
+        end
+    end
+
+    local function startNoclip()
+        stopNoclip()
+        moveNoclipConn = RunService.Stepped:Connect(function()
+            if not moveNoclipEnabled then return end
+            local char = moveGetChar()
+            if not char then return end
+            for _, part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    if spoofedCanCollide[part] == nil then
+                        -- valor "visible" al AC
+                        spoofedCanCollide[part] = true
+                    end
+                    if part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+
+    local function stopSpeedLoop()
+        if moveSpeedConn then
+            pcall(function() moveSpeedConn:Disconnect() end)
+            moveSpeedConn = nil
+        end
+    end
+
+    local function startSpeedLoop()
+        stopSpeedLoop()
+        -- No spamear WalkSpeed cada frame: reaplicar solo si el juego lo resetea
+        moveSpeedConn = RunService.Heartbeat:Connect(function()
+            if not moveSpeedEnabled then return end
+            local hum = moveGetHum()
+            if not hum then return end
+            spoofedWalkSpeeds[hum] = 16
+            if math.abs((hum.WalkSpeed or 16) - moveSpeedValue) > 0.5 then
+                pcall(function()
+                    hum.WalkSpeed = moveSpeedValue
                 end)
             end
-            pcall(function() notify({ Title = "Movement", Content = "Noclip ON", Duration = 2 }) end)
-        else
-            if moveNoclipConn then
-                moveNoclipConn:Disconnect()
-                moveNoclipConn = nil
-            end
-            pcall(function() notify({ Title = "Movement", Content = "Noclip OFF", Duration = 2 }) end)
+        end)
+    end
+
+    -- ===== UI =====
+    movementTab:Section({ Title = "Movimiento protegido" })
+    movementTab:Paragraph({
+        Title = "Aviso",
+        Desc = "Speed/Fly/Noclip usan spoof de WalkSpeed, CanCollide y nombres random. El server aun puede detectar movimiento raro si exageras la velocidad.",
+    })
+
+    -- Movimiento Tela
+    local telaEnabled = false
+    local telaSpeed = 42
+    local telaConn = nil
+
+    local function stopTela()
+        if telaConn then
+            pcall(function() telaConn:Disconnect() end)
+            telaConn = nil
         end
     end
-})
 
--- Glitch de velocidad (igual que MM2: velocidad en aire, 16 en suelo)
-movementTab:Toggle({
-    Flag = "Glitch_de_Velocidad",
-    Title = "Glitch de Velocidad",
-    Desc = "Velocidad al saltar/caer; normal en el suelo. Se apaga el Speed permanente.",
-    Default = false,
-    Callback = function(state)
-        moveSpeedGlitchEnabled = state
-        if state then
+    local function startTela()
+        stopTela()
+        telaConn = RunService.Heartbeat:Connect(function(dt)
+            if not telaEnabled then return end
+            if moveFlyEnabled then return end
+            local char = moveGetChar()
+            if not char then return end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if not hum or not root or hum.Health <= 0 then return end
+            if hum.Sit or hum.PlatformStand then return end
+
+            local move = hum.MoveDirection
+            if move.Magnitude < 0.05 then
+                local vel = root.AssemblyLinearVelocity
+                root.AssemblyLinearVelocity = Vector3.new(vel.X * 0.88, vel.Y, vel.Z * 0.88)
+                return
+            end
+
+            local dir = move.Unit
+            local target = dir * telaSpeed
+            local vel = root.AssemblyLinearVelocity
+            local blend = math.clamp(dt * 12, 0, 1)
+            local nx = vel.X + (target.X - vel.X) * blend
+            local nz = vel.Z + (target.Z - vel.Z) * blend
+            root.AssemblyLinearVelocity = Vector3.new(nx, vel.Y, nz)
+            -- WalkSpeed aparente normal
+            spoofedWalkSpeeds[hum] = 16
+        end)
+    end
+
+    movementTab:Toggle({
+        Flag = "Movimiento_Tela",
+        Title = "Movimiento Tela",
+        Desc = "Desplazamiento fluido hacia donde apunta el joystick (estilo Free Fire).",
+        Default = false,
+        Callback = function(state)
+            telaEnabled = state
+            if state then
+                startTela()
+                pcall(function() notify({ Title = "Movement", Content = "Movimiento Tela: ON", Duration = 2 }) end)
+            else
+                stopTela()
+                pcall(function() notify({ Title = "Movement", Content = "Movimiento Tela: OFF", Duration = 2 }) end)
+            end
+        end,
+    })
+
+    movementTab:Slider({
+        Flag = "Velocidad_Tela",
+        Title = "Velocidad Tela",
+        Desc = "Que tan fuerte empuja el movimiento tela.",
+        Value = { Min = 24, Max = 70, Default = 42 },
+        Callback = function(v)
+            telaSpeed = tonumber(v) or 42
+        end,
+    })
+
+    movementTab:Toggle({
+        Flag = "Velocidad_Speed",
+        Title = "Velocidad (Speed)",
+        Desc = "Aumenta tu velocidad. Lecturas del AC ven WalkSpeed = 16.",
+        Default = false,
+        Callback = function(state)
+            moveSpeedEnabled = state
+            local hum = moveGetHum()
+            if state then
+                if moveSpeedGlitchEnabled then
+                    moveSpeedGlitchEnabled = false
+                    if moveSpeedGlitchConn then moveSpeedGlitchConn:Disconnect(); moveSpeedGlitchConn = nil end
+                    if moveGlitchJumpConn then moveGlitchJumpConn:Disconnect(); moveGlitchJumpConn = nil end
+                end
+                setProtectedWalkSpeed(hum, moveSpeedValue)
+                startSpeedLoop()
+            else
+                stopSpeedLoop()
+                clearWalkSpeedSpoof(hum)
+            end
+            pcall(function()
+                notify({
+                    Title = "Movement",
+                    Content = state and ("Speed ON: " .. tostring(moveSpeedValue)) or "Speed OFF",
+                    Duration = 2,
+                })
+            end)
+        end,
+    })
+
+    movementTab:Slider({
+        Flag = "Valor_de_velocidad",
+        Title = "Valor de velocidad",
+        Desc = "Velocidad real al moverte (recomendado 20-35 para menos riesgo).",
+        Value = { Min = 16, Max = 80, Default = 28 },
+        Callback = function(v)
+            moveSpeedValue = math.clamp(tonumber(v) or 28, 16, 80)
             if moveSpeedEnabled then
-                moveSpeedEnabled = false
-                clearWalkSpeedSpoof(moveGetHum())
+                setProtectedWalkSpeed(moveGetHum(), moveSpeedValue)
             end
-            if not moveGlitchJumpConn then
-                moveGlitchJumpConn = UserInputService.JumpRequest:Connect(function()
-                    if not moveSpeedGlitchEnabled then return end
-                    local hum = moveGetHum()
-                    if hum then
-                        -- velocidad justo antes de despegar (con spoof)
-                        setProtectedWalkSpeed(hum, moveSpeedValue)
-                    end
-                end)
+        end,
+    })
+
+    movementTab:Toggle({
+        Flag = "Fly_Movement",
+        Title = "Fly",
+        Desc = "Vuelo con movers de nombre random + spoof PlatformStand.",
+        Default = false,
+        Callback = function(state)
+            moveFlyEnabled = state
+            if state then
+                if telaEnabled then
+                    telaEnabled = false
+                    stopTela()
+                end
+                startFlyMovers()
+            else
+                stopFlyMovers()
             end
-            if not moveSpeedGlitchConn then
-                moveSpeedGlitchConn = RunService.Stepped:Connect(function()
-                    if not moveSpeedGlitchEnabled then return end
-                    local hum = moveGetHum()
-                    if not hum then return end
-                    local st = hum:GetState()
-                    local inAir = (st == Enum.HumanoidStateType.Jumping or st == Enum.HumanoidStateType.Freefall)
-                    if inAir then
-                        if hum.WalkSpeed ~= moveSpeedValue then
+            pcall(function()
+                notify({ Title = "Movement", Content = state and "Fly ON" or "Fly OFF", Duration = 2 })
+            end)
+        end,
+    })
+
+    movementTab:Slider({
+        Flag = "Velocidad_Fly",
+        Title = "Velocidad Fly",
+        Desc = "Velocidad de vuelo (recomendado 35-55).",
+        Value = { Min = 20, Max = 100, Default = 50 },
+        Callback = function(v)
+            moveFlySpeed = math.clamp(tonumber(v) or 50, 20, 100)
+        end,
+    })
+
+    movementTab:Toggle({
+        Flag = "Inf_Jump",
+        Title = "Inf Jump",
+        Desc = "Salto infinito. JumpPower spoofeado a 50 para lecturas externas.",
+        Default = false,
+        Callback = function(state)
+            moveInfJumpEnabled = state
+            local hum = moveGetHum()
+            if state then
+                setProtectedJumpPower(hum, 50)
+            else
+                clearJumpSpoof(hum)
+            end
+            pcall(function()
+                notify({ Title = "Movement", Content = state and "Inf Jump ON" or "Inf Jump OFF", Duration = 2 })
+            end)
+        end,
+    })
+
+    movementTab:Toggle({
+        Flag = "Noclip_Movement",
+        Title = "Noclip",
+        Desc = "Atraviesa paredes. CanCollide real = false; lecturas del AC ven true.",
+        Default = false,
+        Callback = function(state)
+            moveNoclipEnabled = state
+            if state then
+                startNoclip()
+                pcall(function() notify({ Title = "Movement", Content = "Noclip ON", Duration = 2 }) end)
+            else
+                stopNoclip()
+                pcall(function() notify({ Title = "Movement", Content = "Noclip OFF", Duration = 2 }) end)
+            end
+        end,
+    })
+
+    movementTab:Toggle({
+        Flag = "Glitch_de_Velocidad",
+        Title = "Glitch de Velocidad",
+        Desc = "Solo acelera en el aire; en suelo WalkSpeed vuelve a 16 (menos detectable).",
+        Default = false,
+        Callback = function(state)
+            moveSpeedGlitchEnabled = state
+            if state then
+                if moveSpeedEnabled then
+                    moveSpeedEnabled = false
+                    stopSpeedLoop()
+                    clearWalkSpeedSpoof(moveGetHum())
+                end
+                if not moveGlitchJumpConn then
+                    moveGlitchJumpConn = UserInputService.JumpRequest:Connect(function()
+                        if not moveSpeedGlitchEnabled then return end
+                        local hum = moveGetHum()
+                        if hum then
                             setProtectedWalkSpeed(hum, moveSpeedValue)
                         end
-                    else
-                        if not moveSpeedEnabled and hum.WalkSpeed ~= 16 then
-                            clearWalkSpeedSpoof(hum)
-                            pcall(function() hum.WalkSpeed = 16 end)
-                        end
-                    end
-                end)
-            end
-            pcall(function() notify({ Title = "Movement", Content = "Speed Glitch ON", Duration = 2 }) end)
-        else
-            if moveSpeedGlitchConn then
-                moveSpeedGlitchConn:Disconnect()
-                moveSpeedGlitchConn = nil
-            end
-            if moveGlitchJumpConn then
-                moveGlitchJumpConn:Disconnect()
-                moveGlitchJumpConn = nil
-            end
-            if not moveSpeedEnabled then
-                clearWalkSpeedSpoof(moveGetHum())
-            end
-            pcall(function() notify({ Title = "Movement", Content = "Speed Glitch OFF", Duration = 2 }) end)
-        end
-    end
-})
-
--- Loop movimiento
-task.spawn(function()
-    while true do
-        task.wait(0.05)
-        pcall(function()
-            if moveSpeedEnabled then
-                local hum = moveGetHum()
-                if hum and hum.WalkSpeed ~= moveSpeedValue then
-                    setProtectedWalkSpeed(hum, moveSpeedValue)
+                    end)
                 end
-            end
-            if moveFlyEnabled then
-                local root = moveGetRoot()
-                local hum = moveGetHum()
-                if root then
-                    if not moveFlyBV or moveFlyBV.Parent ~= root then
-                        startFlyMovers()
-                    end
-                    if hum then
-                        pcall(function() hum.PlatformStand = true end)
-                    end
-                    local cam = workspace.CurrentCamera
-                    if cam and moveFlyBV then
-                        local dir = Vector3.zero
-                        if not UserInputService:GetFocusedTextBox() then
-                            if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir += cam.CFrame.LookVector end
-                            if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir -= cam.CFrame.LookVector end
-                            if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir -= cam.CFrame.RightVector end
-                            if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir += cam.CFrame.RightVector end
-                            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir += Vector3.yAxis end
-                            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                                dir -= Vector3.yAxis
-                            end
-                        end
-                        if dir.Magnitude > 0.1 then
-                            moveFlyBV.Velocity = dir.Unit * moveFlySpeed
+                if not moveSpeedGlitchConn then
+                    moveSpeedGlitchConn = RunService.Heartbeat:Connect(function()
+                        if not moveSpeedGlitchEnabled then return end
+                        local hum = moveGetHum()
+                        if not hum then return end
+                        local st = hum:GetState()
+                        local inAir = (st == Enum.HumanoidStateType.Jumping or st == Enum.HumanoidStateType.Freefall)
+                        if inAir then
+                            setProtectedWalkSpeed(hum, moveSpeedValue)
                         else
-                            moveFlyBV.Velocity = Vector3.zero
-                        end
-                        if moveFlyBG then
-                            local flat = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)
-                            if flat.Magnitude > 0.05 then
-                                moveFlyBG.CFrame = CFrame.new(root.Position, root.Position + flat)
+                            if not moveSpeedEnabled then
+                                clearWalkSpeedSpoof(hum)
                             end
                         end
-                    end
+                    end)
                 end
+                pcall(function() notify({ Title = "Movement", Content = "Speed Glitch ON", Duration = 2 }) end)
+            else
+                if moveSpeedGlitchConn then
+                    moveSpeedGlitchConn:Disconnect()
+                    moveSpeedGlitchConn = nil
+                end
+                if moveGlitchJumpConn then
+                    moveGlitchJumpConn:Disconnect()
+                    moveGlitchJumpConn = nil
+                end
+                if not moveSpeedEnabled then
+                    clearWalkSpeedSpoof(moveGetHum())
+                end
+                pcall(function() notify({ Title = "Movement", Content = "Speed Glitch OFF", Duration = 2 }) end)
             end
-        end)
-    end
-end)
+        end,
+    })
 
-table.insert(moveConns, UserInputService.JumpRequest:Connect(function()
-    if not moveInfJumpEnabled then return end
-    local hum = moveGetHum()
-    if hum then
-        pcall(function()
-            hum:ChangeState(Enum.HumanoidStateType.Jumping)
-        end)
-    end
-end))
+    -- Inf jump listener (una sola conexion)
+    table.insert(moveConns, UserInputService.JumpRequest:Connect(function()
+        if not moveInfJumpEnabled then return end
+        local hum = moveGetHum()
+        if not hum then return end
+        local st = hum:GetState()
+        if st == Enum.HumanoidStateType.Freefall or st == Enum.HumanoidStateType.Jumping or st == Enum.HumanoidStateType.Landed then
+            pcall(function()
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end)
+        end
+    end))
 
-player.CharacterAdded:Connect(function()
-    task.wait(0.4)
-    if moveSpeedEnabled then
-        setProtectedWalkSpeed(moveGetHum(), moveSpeedValue)
-    end
-    if moveFlyEnabled then
-        startFlyMovers()
-    end
-end)
+    player.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        -- limpiar tablas de instancias viejas
+        for k in pairs(spoofedWalkSpeeds) do
+            if typeof(k) == "Instance" and not k.Parent then
+                spoofedWalkSpeeds[k] = nil
+            end
+        end
+        for k in pairs(spoofedCanCollide) do
+            if typeof(k) == "Instance" and not k.Parent then
+                spoofedCanCollide[k] = nil
+            end
+        end
+        for k in pairs(spoofedJumpPowers) do
+            if typeof(k) == "Instance" and not k.Parent then
+                spoofedJumpPowers[k] = nil
+            end
+        end
+        if moveSpeedEnabled then
+            setProtectedWalkSpeed(moveGetHum(), moveSpeedValue)
+            startSpeedLoop()
+        end
+        if moveFlyEnabled then
+            startFlyMovers()
+        end
+        if moveNoclipEnabled then
+            startNoclip()
+        end
+        if telaEnabled then
+            startTela()
+        end
+        if moveInfJumpEnabled then
+            setProtectedJumpPower(moveGetHum(), 50)
+        end
+    end)
+end
 
 
 local customTab = Window:Tab({Title = "Custom", Icon = "sparkles", ShowTabTitle = true, Border = true})
