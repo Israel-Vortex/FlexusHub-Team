@@ -1,4 +1,4 @@
--- Vortex X Sage [MM2] - WindUI (sin telemetría Onyx)
+-- FlexusHub [MM2] - WindUI (sin telemetría Onyx)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -19,12 +19,13 @@ local cam_WTVP = workspace.CurrentCamera.WorldToViewportPoint
 local ffc = game.FindFirstChild
 
 local listaJugadores = Players:GetPlayers()
+local function cleanESP(_p) end -- stub; se redefine mas abajo
 Players.PlayerAdded:Connect(function(p) table.insert(listaJugadores, p) end)
 Players.PlayerRemoving:Connect(function(p)
     for i, v in ipairs(listaJugadores) do
         if v == p then 
             table.remove(listaJugadores, i) 
-            cleanESP(p) -- Limpieza inmediata
+            pcall(function() cleanESP(p) end)
             break 
         end
     end
@@ -263,7 +264,7 @@ screenGui.IgnoreGuiInset = true
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local espFolder = Instance.new("Folder")
-espFolder.Name = "VortexESPFolder"
+espFolder.Name = "FlexusESPFolder"
 espFolder.Parent = screenGui
 
 -- 🔥 VARIABLES GLOBALES PARA EDICIÓN DE BOTONES
@@ -297,16 +298,18 @@ local function makeDraggable(guiObject, objectToMove)
 end
 
 
-
-
 -- FAB Vapor-style (dorado) + Lucide via getgenv (ahorra registers)
 do
 	local g = (getgenv and getgenv()) or _G
 	g.__VXFab = g.__VXFab or {}
 	local F = g.__VXFab
-	F.GOLD = Color3.fromRGB(255, 200, 55)
-	F.GLASS = Color3.fromRGB(8, 12, 20)
-	F.GLASS_T = 0.35
+	F.GOLD = Color3.fromRGB(245, 245, 245)
+	F.GLASS = Color3.fromRGB(55, 55, 60)
+	F.GLASS_T = 0.12
+	F.GRAY_ON = Color3.fromRGB(210, 210, 215)
+	F.TEXT_OFF = Color3.fromRGB(200, 200, 205)
+	F.TEXT_ON = Color3.fromRGB(25, 25, 28)
+	F.STROKE_OFF = Color3.fromRGB(140, 140, 145)
 	F.Icons = nil
 	F.IconReady = false
 	F.Queue = F.Queue or {}
@@ -348,7 +351,7 @@ do
 		local BTN_SZ = math.floor(tonumber(cfg.Size) or 48)
 		local ICO_SZ = math.floor(BTN_SZ * 0.42)
 		local Fab = Instance.new("Frame")
-		Fab.Name = cfg.Name or "VortexFab"
+		Fab.Name = cfg.Name or "FlexusFab"
 		Fab.Size = UDim2.fromOffset(BTN_SZ, BTN_SZ)
 		Fab.Position = cfg.Position or UDim2.new(1, -70, 0, 40)
 		Fab.AnchorPoint = cfg.AnchorPoint or Vector2.new(0.5, 0.5)
@@ -405,13 +408,6 @@ do
 	end
 end
 
-local function VXSNotify(title, content, duration)
-	pcall(function()
-		if VortexNotify and VortexNotify.Show then
-			VortexNotify.Show(tostring(title or "Vortex X Sage"), tostring(content or ""), tonumber(duration) or 2.5)
-		end
-	end)
-end
 
 local function createFloatingBtn(name, startPos, internalId)
 	local F = ((getgenv and getgenv()) or _G).__VXFab
@@ -458,26 +454,27 @@ end
 local function UpdateFloatingButtonsSize(sz)
 	sz = math.clamp(math.floor(tonumber(sz) or 42), 28, 64)
 	_G.FloatingBtnSize = sz
-	local F = ((getgenv and getgenv()) or _G).__VXFab
+	local F = ((getgenv and getgenv()) or _G).__VXFab or ((getgenv and getgenv()) or _G).__FlexusFab
 	for _, fab in ipairs(floatingButtonsList) do
-		if not fab or not fab.Parent then continue end
-		TweenService:Create(fab, TweenInfo.new(0.2), { Size = UDim2.fromOffset(sz, sz) }):Play()
-		local corner = fab:FindFirstChildOfClass("UICorner")
-		if corner then corner.CornerRadius = UDim.new(0, 10) end
-		local glow = fab:FindFirstChild("Glow")
-		if glow then
-			local gc = glow:FindFirstChildOfClass("UICorner")
-			if gc then gc.CornerRadius = UDim.new(0, 10) end
-		end
-		if F then
-			fab.BackgroundColor3 = F.GLASS
-			fab.BackgroundTransparency = F.GLASS_T
-			local stroke = fab:FindFirstChild("Stroke")
-			if stroke then stroke.Color = F.GOLD; stroke.Transparency = 0.45 end
-			local ic = fab:FindFirstChild("Icon")
-			if ic then
-				ic.ImageColor3 = F.GOLD
-				ic.Size = UDim2.fromOffset(math.floor(sz * 0.42), math.floor(sz * 0.42))
+		if fab and fab.Parent then
+			TweenService:Create(fab, TweenInfo.new(0.2), { Size = UDim2.fromOffset(sz, sz) }):Play()
+			local corner = fab:FindFirstChildOfClass("UICorner")
+			if corner then corner.CornerRadius = UDim.new(0, 9) end
+			if F then
+				local active = fab:GetAttribute("Active") == true
+				fab.BackgroundColor3 = active and (F.GRAY_ON or F.GOLD) or F.GLASS
+				fab.BackgroundTransparency = F.GLASS_T
+				local stroke = fab:FindFirstChild("Stroke")
+				if stroke then
+					stroke.Color = active and (F.GOLD or Color3.fromRGB(245,245,245)) or (F.STROKE_OFF or Color3.fromRGB(140,140,145))
+					stroke.Thickness = 1.2
+					stroke.Transparency = 0.15
+				end
+				local ic = fab:FindFirstChild("Icon")
+				if ic then
+					ic.ImageColor3 = active and (F.TEXT_ON or Color3.fromRGB(25,25,28)) or (F.TEXT_OFF or F.GOLD)
+					ic.Size = UDim2.fromOffset(math.floor(sz * 0.42), math.floor(sz * 0.42))
+				end
 			end
 		end
 	end
@@ -486,8 +483,10 @@ end
 local WindUI
 do
     local urls = {
-        "https://github.com/MrSxxo/WindUI/releases/latest/download/main.lua",
+        "https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/FlexusHub/Flexus-Lib/Flexus-Team/WindUi-FlexusHub.lua",
+        "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua",
         "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
+        "https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.lua",
     }
     for _, url in ipairs(urls) do
         local ok, res = pcall(function()
@@ -501,97 +500,136 @@ do
 end
 
 if not WindUI then
-    warn("[Vortex] No se pudo cargar WindUI")
+    warn("[FlexusHub] No se pudo cargar WindUI")
     return
 end
 
 local LocalPlayer = player
 
-pcall(function()
-VXSNotify("Login VortexHub", "Login VortexHub", 2)
-end)
-task.wait(0.4)
 
-local Window = WindUI:CreateWindow({
-    Title = "Vortex X Sage [MM2]",
-    Icon = "rbxassetid://118833096342184",
-    IconSize = 35,
-    Author = "By Israelcc & Novak",
-    Folder = "VortexXSageMM2",
-    Background = "rbxassetid://133044138027516",
-    Size = UDim2.fromOffset(680, 520),
-    MinSize = Vector2.new(480, 360),
-    MaxSize = Vector2.new(1100, 800),
-    Resizable = true,
-    HideSearchBar = true,
-    Transparent = false,
-    Theme = "Dark",
-})
+local Window
+do
+    local okWin, winOrErr = pcall(function()
+        return WindUI:CreateWindow({
+            Title = "FlexusHub [MM2]",
+            Icon = "rbxassetid://78482030075403",
+            IconSize = 35,
+            IconThemed = true,
+            Author = "Flexus-Team",
+            Folder = "FlexusHub_MM2",
+            ConfigName = "FlexusHub_MM2",
+            Background = "rbxassetid://83511264088514",
+            BackgroundImageTransparency = 0.22,
+            Size = UDim2.fromOffset(520, 405),
+            MinSize = Vector2.new(440, 335),
+            MaxSize = Vector2.new(650, 500),
+            Resizable = true,
+            HideSearchBar = true,
+            Transparent = false,
+            Acrylic = false,
+            SideBarWidth = 145,
+            ElementsRadius = 12,
+            ModernLayout = true,
+            ModernLayoutMergeElements = false,
+            HidePanelBackground = false,
+            Theme = "Dark",
+            OpenButton = {
+                Enabled = true,
+                Title = "FlexusHub [MM2]",
+                Icon = "rbxassetid://78482030075403",
+                OnlyMobile = false,
+                Draggable = true,
+                Scale = 0.82,
+                StrokeThickness = 1,
+                Color = ColorSequence.new(Color3.fromRGB(118, 118, 124), Color3.fromRGB(164, 164, 170)),
+            },
+        })
+    end)
+    if okWin and winOrErr then
+        Window = winOrErr
+    else
+        -- Fallback sin opciones extras por si el executor no soporta alguna key
+        local ok2, win2 = pcall(function()
+            return WindUI:CreateWindow({
+                Title = "FlexusHub [MM2]",
+                Author = "Flexus-Team",
+                Folder = "FlexusHub_MM2",
+                Icon = "rbxassetid://78482030075403",
+                Background = "rbxassetid://83511264088514",
+                Size = UDim2.fromOffset(520, 405),
+                Theme = "Dark",
+            })
+        end)
+        if ok2 and win2 then
+            Window = win2
+        else
+            warn("[FlexusHub] CreateWindow fallo:", tostring(winOrErr), tostring(win2))
+            return
+        end
+    end
+end
 
 pcall(function()
     Window:EditOpenButton({
-        Title = "VXS",
-        Icon = "rbxassetid://118833096342184",
-        CornerRadius = UDim.new(1, 0),
-        StrokeThickness = 2,
+        Title = "FlexusHub",
+        Icon = "rbxassetid://78482030075403",
+        CornerRadius = UDim.new(0, 12),
+        StrokeThickness = 1,
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(160, 110, 20)),
-            ColorSequenceKeypoint.new(0.4, Color3.fromRGB(220, 170, 40)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 215, 90))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(118, 118, 124)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 200, 205)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(164, 164, 170))
         }),
-        OnlyMobile = true,
+        OnlyMobile = false,
         Enabled = true,
         Draggable = true,
     })
 end)
 
-pcall(function()
-    Window:Tag({ Title = "v3.3.41", Icon = "github", Color = Color3.fromRGB(220, 170, 40) })
-end)
 
 pcall(function()
     WindUI:AddTheme({
-        Name = "VortexGoldSolid",
-        Accent = Color3.fromRGB(255, 195, 45),
-        Background = Color3.fromRGB(12, 12, 14),
+        Name = "Graphite",
+        Accent = Color3.fromRGB(200, 200, 205),
+        Background = Color3.fromRGB(8, 8, 10),
         BackgroundTransparency = 0,
-        Outline = Color3.fromRGB(255, 210, 70),
+        Outline = Color3.fromRGB(180, 180, 185),
         Text = Color3.fromRGB(255, 255, 255),
         Placeholder = Color3.fromRGB(190, 190, 200),
-        Button = Color3.fromRGB(210, 160, 35),
-        Icon = Color3.fromRGB(255, 200, 60),
+        Button = Color3.fromRGB(55, 55, 60),
+        Icon = Color3.fromRGB(220, 220, 225),
         Hover = Color3.fromRGB(255, 255, 255),
-        WindowBackground = Color3.fromRGB(14, 14, 16),
-        WindowShadow = Color3.fromRGB(255, 185, 50),
+        WindowBackground = Color3.fromRGB(10, 10, 12),
+        WindowShadow = Color3.fromRGB(160, 160, 165),
         DialogBackground = Color3.fromRGB(18, 18, 22),
         DialogBackgroundTransparency = 0,
         DialogTitle = Color3.fromRGB(255, 255, 255),
         DialogContent = Color3.fromRGB(235, 235, 240),
-        DialogIcon = Color3.fromRGB(255, 200, 60),
+        DialogIcon = Color3.fromRGB(220, 220, 225),
         WindowTopbarButtonIcon = Color3.fromRGB(255, 255, 255),
         WindowTopbarTitle = Color3.fromRGB(255, 255, 255),
         WindowTopbarAuthor = Color3.fromRGB(210, 210, 220),
-        WindowTopbarIcon = Color3.fromRGB(255, 200, 60),
-        TabBackground = Color3.fromRGB(20, 20, 24),
+        WindowTopbarIcon = Color3.fromRGB(220, 220, 225),
+        TabBackground = Color3.fromRGB(28, 28, 32),
         TabTitle = Color3.fromRGB(255, 255, 255),
-        TabIcon = Color3.fromRGB(255, 205, 70),
+        TabIcon = Color3.fromRGB(200, 200, 205),
         ElementBackground = Color3.fromRGB(24, 24, 30),
         ElementTitle = Color3.fromRGB(255, 255, 255),
         ElementDesc = Color3.fromRGB(200, 200, 210),
-        ElementIcon = Color3.fromRGB(255, 205, 70),
+        ElementIcon = Color3.fromRGB(200, 200, 205),
         PopupBackground = Color3.fromRGB(18, 18, 22),
         PopupBackgroundTransparency = 0,
         PopupTitle = Color3.fromRGB(255, 255, 255),
         PopupContent = Color3.fromRGB(230, 230, 235),
-        PopupIcon = Color3.fromRGB(255, 205, 70),
-        Toggle = Color3.fromRGB(255, 195, 45),
+        PopupIcon = Color3.fromRGB(200, 200, 205),
+        Toggle = Color3.fromRGB(200, 200, 205),
         ToggleBar = Color3.fromRGB(40, 40, 50),
         Checkbox = Color3.fromRGB(40, 40, 50),
         CheckboxIcon = Color3.fromRGB(255, 255, 255),
-        Slider = Color3.fromRGB(255, 195, 45),
+        Slider = Color3.fromRGB(200, 200, 205),
         SliderThumb = Color3.fromRGB(255, 255, 255),
     })
-    WindUI:SetTheme("VortexGoldSolid")
+    WindUI:SetTheme("Graphite")
 end)
 
 pcall(function() Window:SetToggleKey(Enum.KeyCode.RightAlt) end)
@@ -602,32 +640,46 @@ pcall(function() Window:OnClose(function() end) end)
 -- ==========================================
 -- NOTIFICACIONES (WindUI)
 -- ==========================================
-local function sendNotification(text)
+local function sendNotification(title, content, duration)
+    if content == nil then
+        content = title
+        title = "FlexusHub"
+    end
     pcall(function()
-        VXSNotify("Vortex X Sage", "", 2.5)
+        if WindUI and WindUI.Notify then
+            WindUI:Notify({
+                Title = tostring(title or "FlexusHub"),
+                Content = tostring(content or ""),
+                Duration = tonumber(duration) or 2.5,
+            })
+        end
     end)
 end
 
+if not Window then
+    warn("[FlexusHub] Window nil, abort")
+    return
+end
 local MainSection = Window:Section({ Title = "Funciones Principales", Opened = true})
 local TrollSection = Window:Section({ Title = "Configs y Extra", Opened = true})
 
 local Tabs = {
-    -- Principal: info + combate + farm
-    Info = MainSection:Tab({ Title = "Info", Icon = "solar:info-circle-bold" }),
-    Murderer = MainSection:Tab({ Title = "Murderer", Icon = "solar:danger-bold" }),
-    Sheriff = MainSection:Tab({ Title = "Sheriff", Icon = "solar:target-bold" }),
-    Troll = TrollSection:Tab({ Title = "Troll", Icon = "solar:ghost-bold" }),
-    AutoFarm = MainSection:Tab({ Title = "AutoFarm", Icon = "solar:dollar-bold" }),
-    ESP = MainSection:Tab({ Title = "ESP", Icon = "solar:eye-bold" }),
-    -- Utilidades
-    Movimiento = MainSection:Tab({ Title = "Movement", Icon = "solar:running-bold" }),
-    Teleport = MainSection:Tab({ Title = "Teleport", Icon = "solar:map-point-bold" }),
-    Bubbles = MainSection:Tab({ Title = "Bubbles", Icon = "solar:widget-bold" }),
-    -- Extra
-    Graficos = MainSection:Tab({ Title = "Graphics", Icon = "solar:palette-bold" }),
-    Emotes = TrollSection:Tab({ Title = "Animaciones", Icon = "solar:smile-circle-bold" }),
-    Config = TrollSection:Tab({ Title = "Config", Icon = "solar:settings-bold" })
+    Info = MainSection:Tab({ Title = "Information", Icon = "badge-info", ShowTabTitle = true, Border = true }),
+    Murderer = MainSection:Tab({ Title = "Murderer", Icon = "swords", ShowTabTitle = true, Border = true }),
+    Sheriff = MainSection:Tab({ Title = "Sheriff", Icon = "crosshair", ShowTabTitle = true, Border = true }),
+    Troll = TrollSection:Tab({ Title = "Troll", Icon = "ghost", ShowTabTitle = true, Border = true }),
+    AutoFarm = MainSection:Tab({ Title = "AutoFarm", Icon = "coins", ShowTabTitle = true, Border = true }),
+    ESP = MainSection:Tab({ Title = "ESP", Icon = "eye", ShowTabTitle = true, Border = true }),
+    Movimiento = MainSection:Tab({ Title = "Movement", Icon = "person-standing", ShowTabTitle = true, Border = true }),
+    Teleport = MainSection:Tab({ Title = "Teleport", Icon = "map-pin", ShowTabTitle = true, Border = true }),
+    Bubbles = MainSection:Tab({ Title = "Bubbles", Icon = "circle", ShowTabTitle = true, Border = true }),
+    Graficos = MainSection:Tab({ Title = "Graphics", Icon = "palette", ShowTabTitle = true, Border = true }),
+    Emotes = TrollSection:Tab({ Title = "Animaciones", Icon = "smile", ShowTabTitle = true, Border = true }),
+    Config = TrollSection:Tab({ Title = "Guardado", Icon = "save", ShowTabTitle = true, Border = true }),
+    Music = TrollSection:Tab({ Title = "Music", Icon = "music", ShowTabTitle = true, Border = true }),
+    Extra = TrollSection:Tab({ Title = "Extra", Icon = "package", ShowTabTitle = true, Border = true }),
 }
+
 pcall(function() Tabs.Info:Select() end)
 
 local UIElements = {}
@@ -651,38 +703,235 @@ task.spawn(function()
 end)
 
 
+local themeBackgrounds = {
+    Graphite = "rbxassetid://83511264088514",
+    ["Neon Blue"] = "rbxassetid://91622993482762",
+    Golden = "rbxassetid://73167161449222",
+}
+local currentThemeName = "Graphite"
+local function getThemeBannerImage(themeName)
+    return themeBackgrounds[themeName] or themeBackgrounds.Graphite
+end
 
-
-Tabs.Info:Section({ Title = "Acerca del Script" })
+Tabs.Info:Divider({ Title = "Información" })
 
 Tabs.Info:Paragraph({
-    Title = "Vortex X Sage [MM2]",
-    Desc = "Script multi-executor para Murder Mystery 2.\nIncluye ESP de roles, Sheriff/Murder tools, AutoFarm, movimiento, teleports, emotes y botones flotantes.\nCompatible con PC y móvil (Delta, Hydrogen, CodeX, etc.).\n\nDesarrolladores: Israelcc & Novak\nUI: WindUI\nVersión: 3.3.41"
+    Title = "FlexusHub [MM2]",
+    Desc = "Script multi-executor para Murder Mystery 2.\nIncluye ESP de roles, herramientas de Murderer/Sheriff, AutoFarm, movimiento, teleports, emotes y bubbles.\nCompatible con PC y móvil (Delta, Hydrogen, CodeX, etc.).\n\nDesarrollador: Flexus-Team\nUI: WindUI\nVersión: 3.4.0",
+    Image = "rbxassetid://78482030075403",
+    ImageSize = 72,
 })
 
 Tabs.Info:Paragraph({
-    Title = "Desarrolladores",
-    Desc = "Israelcc & Novak\nDesarrollo principal, mantenimiento y actualizaciones del hub MM2."
+    Title = "Desarrollador",
+    Desc = "Flexus-Team\nDesarrollo, mantenimiento y actualizaciones del script.",
 })
 
-Tabs.Info:Divider()
+Tabs.Info:Divider({ Title = "Comunidad" })
 
-Tabs.Info:Paragraph({
-    Title = "Únete a nuestro Discord",
-    Desc = "Únete a nuestra comunidad oficial para soporte, actualizaciones y hablar con otros miembros.\n\nhttps://discord.gg/Fn74MpzFUn",
-    Image = "rbxassetid://88267176037146",
-    ImageSize = 80
+local discordBanner = Tabs.Info:Paragraph({
+    Title = "Discord FlexusHub",
+    Desc = "Únete al servidor oficial para soporte, actualizaciones y comunidad.\n\nhttps://discord.gg/Fn74MpzFUn",
+    Image = getThemeBannerImage(currentThemeName),
+    ImageSize = 160,
 })
+
+local function updateDiscordBannerImage(themeName)
+    currentThemeName = themeName or currentThemeName
+    local img = getThemeBannerImage(currentThemeName)
+    if not discordBanner then return end
+    pcall(function()
+        if type(discordBanner.SetImage) == "function" then
+            discordBanner:SetImage(img)
+        elseif type(discordBanner.Set) == "function" then
+            discordBanner:Set({ Image = img })
+        end
+    end)
+end
 
 Tabs.Info:Button({
-    Title = "Copiar Enlace de Discord",
+    Title = "Copiar enlace de Discord",
     Callback = function()
         pcall(function()
             if setclipboard then setclipboard("https://discord.gg/Fn74MpzFUn")
             elseif setclip then setclip("https://discord.gg/Fn74MpzFUn")
             elseif toclipboard then toclipboard("https://discord.gg/Fn74MpzFUn") end
         end)
-        sendNotification("¡Enlace de Discord copiado!")
+        sendNotification("Discord", "Invite copiado al portapapeles", 2)
+    end
+})
+
+Tabs.Info:Button({
+    Title = "Copiar sitio web",
+    Callback = function()
+        pcall(function()
+            local u = "https://flexushub-scripts.netlify.app/"
+            if setclipboard then setclipboard(u)
+            elseif setclip then setclip(u)
+            elseif toclipboard then toclipboard(u) end
+        end)
+        sendNotification("Website", "Link copiado al portapapeles", 2)
+    end
+})
+
+
+Tabs.Info:Divider({ Title = "Reportar bug / sugerencia" })
+local reportText = ""
+local lastReportTime = 0
+Tabs.Info:Input({
+    Title = "Mensaje",
+    Flag = "ReportText",
+    Value = "",
+    Placeholder = "Describe el bug o la sugerencia...",
+    Callback = function(t)
+        reportText = t
+    end
+})
+Tabs.Info:Button({
+    Title = "Enviar reporte",
+    Desc = "Envia el reporte a FlexusHub (web + Discord).",
+    Callback = function()
+        local currentTime = os.time()
+        if currentTime - lastReportTime < 60 then
+            sendNotification("Reporte", "Espera " .. tostring(60 - (currentTime - lastReportTime)) .. "s", 2)
+            return
+        end
+        if reportText == "" or tostring(reportText):match("^%s*$") then
+            sendNotification("Reporte", "Escribe un mensaje primero", 2)
+            return
+        end
+        local REPORT_API_URL = "https://vortex-x-sage.vercel.app/api/report"
+        local DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1555645993247051906/5spy-DPMDAL5qhbS2mk5S-wesGubALPm5JhtiNO9CR34A70x2VKTk2Du2jmTPx37cGi1"
+        local reportHttpService = game:GetService("HttpService")
+        local reportPlayer = player
+        local reportGameName = "Murder Mystery 2"
+        pcall(function()
+            reportGameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
+        end)
+        local executorNameR = "Unknown"
+        pcall(function()
+            if identifyexecutor then executorNameR = identifyexecutor()
+            elseif getexecutorname then executorNameR = getexecutorname() end
+        end)
+        local function httpPostJson(url, body)
+            local req = request or http_request or (syn and syn.request) or (http and http.request)
+            if not req then return false end
+            local ok, res = pcall(function()
+                return req({
+                    Url = url,
+                    Method = "POST",
+                    Headers = { ["Content-Type"] = "application/json" },
+                    Body = body,
+                })
+            end)
+            if not ok or not res then return false end
+            local code = res.StatusCode or res.Status or 0
+            return tonumber(code) and tonumber(code) >= 200 and tonumber(code) < 300
+        end
+        local msg = tostring(reportText or ""):sub(1, 1800)
+        local plainPayload = reportHttpService:JSONEncode({
+            message = msg,
+            game = reportGameName,
+            placeId = tostring(game.PlaceId),
+            jobId = tostring(game.JobId),
+            username = reportPlayer.Name,
+            displayName = reportPlayer.DisplayName,
+            userId = tostring(reportPlayer.UserId),
+            executor = executorNameR,
+            script = "FlexusHub [MM2]",
+        })
+        local okWeb = httpPostJson(REPORT_API_URL, plainPayload)
+        local okDiscord = false
+        if not okWeb then
+            local embed = {
+                title = "FlexusHub — Nuevo reporte",
+                description = msg,
+                color = 16766720,
+                fields = {
+                    { name = "Jugador", value = string.format("%s (@%s) | ID: %s", reportPlayer.DisplayName or "?", reportPlayer.Name or "?", tostring(reportPlayer.UserId or "?")), inline = false },
+                    { name = "Juego", value = tostring(reportGameName), inline = true },
+                    { name = "PlaceId", value = tostring(game.PlaceId), inline = true },
+                    { name = "Script", value = "FlexusHub [MM2]", inline = true },
+                    { name = "Executor", value = tostring(executorNameR), inline = true },
+                },
+                footer = { text = "FlexusHub Reports · Fallback" },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            }
+            local discordPayload = reportHttpService:JSONEncode({
+                username = "FlexusHub Reports",
+                embeds = { embed },
+            })
+            okDiscord = httpPostJson(DISCORD_WEBHOOK, discordPayload)
+        end
+        if okWeb or okDiscord then
+            lastReportTime = currentTime
+            sendNotification("Reporte", okWeb and "Enviado (Web)" or "Enviado (Discord)", 2.5)
+        else
+            sendNotification("Reporte", "No se pudo enviar", 2.5)
+        end
+    end
+})
+
+Tabs.Info:Divider({ Title = "Apariencia" })
+
+local function applyOpenButtonTheme(themeName)
+    local seq
+    if themeName == "Golden" then
+        seq = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 120, 20)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 200, 80)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 160, 40)),
+        })
+    elseif themeName == "Neon Blue" then
+        seq = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 80, 180)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 180, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 140, 255)),
+        })
+    else
+        seq = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(118, 118, 124)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 200, 205)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(164, 164, 170)),
+        })
+    end
+    pcall(function()
+        Window:EditOpenButton({
+            Title = "FlexusHub [MM2]",
+            Icon = "rbxassetid://78482030075403",
+            CornerRadius = UDim.new(0, 12),
+            StrokeThickness = 1,
+            Color = seq,
+            OnlyMobile = false,
+            Enabled = true,
+            Draggable = true,
+        })
+    end)
+end
+
+Tabs.Info:Dropdown({
+    Title = "Theme del menu",
+    Flag = "InterfaceTheme",
+    Values = { "Graphite", "Neon Blue", "Golden" },
+    Value = "Graphite",
+    Callback = function(themeName)
+        themeName = tostring(themeName or "Graphite")
+        local background = themeBackgrounds[themeName]
+        if not background then return end
+        pcall(function() WindUI:SetTheme(themeName) end)
+        pcall(function()
+            if Window.SetBackgroundImage then
+                Window:SetBackgroundImage(background)
+                if Window.SetBackgroundImageTransparency then
+                    Window:SetBackgroundImageTransparency(0.22)
+                end
+            elseif Window.SetBackground then
+                Window:SetBackground(background)
+            end
+        end)
+        pcall(function() updateDiscordBannerImage(themeName) end)
+        applyOpenButtonTheme(themeName)
+        sendNotification("Theme", "Theme aplicado: " .. themeName, 2)
     end
 })
 
@@ -722,7 +971,7 @@ local function ensureFpsPingGui()
     if fpsScreenGui and fpsScreenGui.Parent then return end
     local parent = (gethui and gethui()) or CoreGui or player:FindFirstChildOfClass("PlayerGui")
     fpsScreenGui = Instance.new("ScreenGui")
-    fpsScreenGui.Name = "VortexFpsPing"
+    fpsScreenGui.Name = "FlexusFpsPing"
     fpsScreenGui.ResetOnSpawn = false
     fpsScreenGui.IgnoreGuiInset = true
     fpsScreenGui.DisplayOrder = 9990
@@ -975,7 +1224,7 @@ local espDistanceEnabled = false
 local espSkeletonEnabled = false 
 local espLinesEnabled = false -- ✨ NUEVA VARIABLE PARA LÍNEAS
 
-local function cleanESP(targetPlayer)
+cleanESP = function(targetPlayer)
     if activeESPs[targetPlayer] then
         if activeESPs[targetPlayer].Highlight then activeESPs[targetPlayer].Highlight:Destroy() end
         if activeESPs[targetPlayer].Billboard then activeESPs[targetPlayer].Billboard:Destroy() end
@@ -983,8 +1232,6 @@ local function cleanESP(targetPlayer)
         activeESPs[targetPlayer] = nil
     end
 end
-
-
 
 
 task.wait() -- 🔥 AÑADE ESTO
@@ -1327,8 +1574,8 @@ local function setupTextElement(v, myName, myDisp)
 
     if v:IsA("TextLabel") or v:IsA("TextBox") or v:IsA("TextButton") then
         -- 🔥 ESTA ES LA PROTECCIÓN QUE FALTA
-        if v:GetAttribute("AstraInfectado") then return end
-        v:SetAttribute("AstraInfectado", true)
+        if v:GetAttribute("FHInfectado") then return end
+        v:SetAttribute("FHInfectado", true)
 
     local function checkAndReplace()
             local txt = v.Text
@@ -1896,7 +2143,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 
 
-
 local genesisSheriffCargado = false local genesisMurderCargado = false
 task.wait() 
 
@@ -2115,7 +2361,6 @@ UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
         end
     end
 end)
-
 
 
 task.wait()
@@ -2440,7 +2685,7 @@ task.spawn(function()
 
                 if currentBagAmount >= maxBagCapacity then
                     isBusy = true
-                    VXSNotify("Auto Farm", "¡Bolsa llena (", 2)
+                    sendNotification("Auto Farm", "Bolsa llena", 2)
                     currentBagAmount = 0
                     isBusy = false
                 end
@@ -2999,8 +3244,6 @@ UIElements.ToggleInfJump = Tabs.Movimiento:Toggle({ Flag = "Salto_Infinito",
     Title = "Salto Infinito", Value = false, Callback = function(state) infinityJumpEnabled = state end })
 
 
-
-
 Tabs.Movimiento:Section({ Title = "Modo Fantasma" })
 
 local invisHumanoid = nil; local invisHumanoidRootPart = nil; local isInvisible = false; local invisCharacterParts = {}; local invisHeartbeatConnection = nil; local invisBg = nil; local invisBv = nil; local invisFlySpeed = 40 
@@ -3520,16 +3763,11 @@ for name, _ in pairs(animationData) do table.insert(animList, name) end
 table.sort(animList)
 
 do
-Tabs.Emotes:Section({ Title = "Paquetes Completos" })
+Tabs.Emotes:Divider({ Title = "Paquetes Completos" })
 
 local selectedBundleCompleto = "None"
-Tabs.Emotes:Dropdown({
-    Flag = "Seleccionar_Paquete",
-    Title = "Seleccionar Paquete", 
-    Values = animList, 
-    Value = "None", 
-    Callback = function(Value) selectedBundleCompleto = Value end
-})
+local autoMixApplyEnabled = false
+local mixParts = { Idle = "None", Walk = "None", Run = "None", Jump = "None", Fall = "None", Climb = "None" }
 
 local function restoreDefaultAnimsMM2()
     local defaultAnims = misAnimacionesOriginales or {
@@ -3540,100 +3778,68 @@ local function restoreDefaultAnimsMM2()
     applyCustomAnims(defaultAnims)
 end
 
-Tabs.Emotes:Toggle({
-    Flag = "Activar_Paquete",
-    Title = "Activar Paquete",
-    Desc = "ON = aplica el paquete. OFF = restaura default.",
-    Default = false,
-    Callback = function(state)
-        task.spawn(function()
-            if state then
-                if selectedBundleCompleto == "None" or not animationData[selectedBundleCompleto] then
-                    sendNotification("Elige un paquete primero.")
-                    return
-                end
-                sendNotification("Paquete ON: " .. selectedBundleCompleto)
-                animacionActualActiva = animationData[selectedBundleCompleto]
-                applyCustomAnims(animacionActualActiva)
-            else
-                restoreDefaultAnimsMM2()
-                sendNotification("Paquete OFF · default")
-            end
-        end)
+local function applySelectedMix()
+    local customMix = {}
+    if mixParts.Idle ~= "None" and animationData[mixParts.Idle] then
+        customMix.Idle = animationData[mixParts.Idle].Idle
+        customMix.Idle2 = animationData[mixParts.Idle].Idle2
     end
-})
+    if mixParts.Walk ~= "None" and animationData[mixParts.Walk] then customMix.Walk = animationData[mixParts.Walk].Walk end
+    if mixParts.Run ~= "None" and animationData[mixParts.Run] then customMix.Run = animationData[mixParts.Run].Run end
+    if mixParts.Jump ~= "None" and animationData[mixParts.Jump] then customMix.Jump = animationData[mixParts.Jump].Jump end
+    if mixParts.Fall ~= "None" and animationData[mixParts.Fall] then customMix.Fall = animationData[mixParts.Fall].Fall end
+    if mixParts.Climb ~= "None" and animationData[mixParts.Climb] then customMix.Climb = animationData[mixParts.Climb].Climb end
+    local hasValues = false
+    for _, v in pairs(customMix) do if v then hasValues = true break end end
+    if hasValues then
+        animacionActualActiva = customMix
+        applyCustomAnims(animacionActualActiva)
+        sendNotification("Animaciones", "Mezcla aplicada", 2)
+        return true
+    end
+    sendNotification("Animaciones", "Selecciona al menos una animacion", 2)
+    return false
+end
 
-Tabs.Emotes:Toggle({
-    Flag = "Forzar_Default",
-    Title = "Forzar Default",
-    Desc = "Restaura animaciones originales del avatar.",
-    Default = false,
-    Callback = function(state)
-        if state then
-            task.spawn(function()
-                restoreDefaultAnimsMM2()
-                sendNotification("Animaciones default restauradas.")
-            end)
+Tabs.Emotes:Dropdown({ Flag = "Seleccionar_Paquete", Title = "Elegir paquete", Values = animList, Value = "None", Callback = function(Value) selectedBundleCompleto = Value end })
+Tabs.Emotes:Button({ Title = "Aplicar paquete completo", Callback = function()
+    task.spawn(function()
+        if selectedBundleCompleto == "None" or not animationData[selectedBundleCompleto] then
+            sendNotification("Animaciones", "Elige un paquete primero", 2)
+            return
         end
-    end
-})
-
-Tabs.Emotes:Section({ Title = "Mezclador de Animaciones" })
-
-local mixParts = {
-    Idle = "None", Walk = "None", Run = "None", 
-    Jump = "None", Fall = "None", Climb = "None"
-}
-
-Tabs.Emotes:Dropdown({Flag = "Idle",
-    Title = "Idle", Values = animList, Value = "None", Callback = function(Value) mixParts.Idle = Value end})
-Tabs.Emotes:Dropdown({Flag = "Walk",
-    Title = "Walk", Values = animList, Value = "None", Callback = function(Value) mixParts.Walk = Value end})
-Tabs.Emotes:Dropdown({Flag = "Run",
-    Title = "Run", Values = animList, Value = "None", Callback = function(Value) mixParts.Run = Value end})
-Tabs.Emotes:Dropdown({Flag = "Jump",
-    Title = "Jump", Values = animList, Value = "None", Callback = function(Value) mixParts.Jump = Value end})
-Tabs.Emotes:Dropdown({Flag = "Fall",
-    Title = "Fall", Values = animList, Value = "None", Callback = function(Value) mixParts.Fall = Value end})
-Tabs.Emotes:Dropdown({Flag = "Climb",
-    Title = "Climb", Values = animList, Value = "None", Callback = function(Value) mixParts.Climb = Value end})
-
+        animacionActualActiva = animationData[selectedBundleCompleto]
+        applyCustomAnims(animacionActualActiva)
+        sendNotification("Animaciones", "Paquete: " .. selectedBundleCompleto, 2)
+    end)
+end })
+Tabs.Emotes:Button({ Title = "Restaurar animaciones default", Callback = function()
+    task.spawn(function()
+        restoreDefaultAnimsMM2()
+        sendNotification("Animaciones", "Default restaurado", 2)
+    end)
+end })
+Tabs.Emotes:Divider({ Title = "Mezclador de Animaciones" })
+Tabs.Emotes:Dropdown({Flag = "Idle", Title = "Idle", Values = animList, Value = "None", Callback = function(Value) mixParts.Idle = Value if autoMixApplyEnabled then applySelectedMix() end end})
+Tabs.Emotes:Dropdown({Flag = "Walk", Title = "Walk", Values = animList, Value = "None", Callback = function(Value) mixParts.Walk = Value if autoMixApplyEnabled then applySelectedMix() end end})
+Tabs.Emotes:Dropdown({Flag = "Run", Title = "Run", Values = animList, Value = "None", Callback = function(Value) mixParts.Run = Value if autoMixApplyEnabled then applySelectedMix() end end})
+Tabs.Emotes:Dropdown({Flag = "Jump", Title = "Jump", Values = animList, Value = "None", Callback = function(Value) mixParts.Jump = Value if autoMixApplyEnabled then applySelectedMix() end end})
+Tabs.Emotes:Dropdown({Flag = "Fall", Title = "Fall", Values = animList, Value = "None", Callback = function(Value) mixParts.Fall = Value if autoMixApplyEnabled then applySelectedMix() end end})
+Tabs.Emotes:Dropdown({Flag = "Climb", Title = "Climb", Values = animList, Value = "None", Callback = function(Value) mixParts.Climb = Value if autoMixApplyEnabled then applySelectedMix() end end})
+Tabs.Emotes:Button({ Title = "Aplicar mezcla", Callback = function() task.spawn(applySelectedMix) end })
 Tabs.Emotes:Toggle({
-    Flag = "Activar_Mezcla",
-    Title = "Activar Mezcla",
-    Desc = "ON = aplica mezcla. OFF = restaura default.",
+    Flag = "AutoMixApply",
+    Title = "Auto aplicar mezcla",
+    Desc = "Aplica la mezcla al cambiar cualquier dropdown.",
     Default = false,
-    Callback = function(state)
-        task.spawn(function()
-            if not state then
-                restoreDefaultAnimsMM2()
-                sendNotification("Mezcla OFF · default")
-                return
-            end
-            local customMix = {}
-            if mixParts.Idle ~= "None" and animationData[mixParts.Idle] then
-                customMix.Idle = animationData[mixParts.Idle].Idle
-                customMix.Idle2 = animationData[mixParts.Idle].Idle2
-            end
-            if mixParts.Walk ~= "None" and animationData[mixParts.Walk] then customMix.Walk = animationData[mixParts.Walk].Walk end
-            if mixParts.Run ~= "None" and animationData[mixParts.Run] then customMix.Run = animationData[mixParts.Run].Run end
-            if mixParts.Jump ~= "None" and animationData[mixParts.Jump] then customMix.Jump = animationData[mixParts.Jump].Jump end
-            if mixParts.Fall ~= "None" and animationData[mixParts.Fall] then customMix.Fall = animationData[mixParts.Fall].Fall end
-            if mixParts.Climb ~= "None" and animationData[mixParts.Climb] then customMix.Climb = animationData[mixParts.Climb].Climb end
-            local hasValues = false
-            for _, v in pairs(customMix) do if v then hasValues = true break end end
-            if hasValues then
-                sendNotification("Mezcla ON")
-                animacionActualActiva = customMix
-                applyCustomAnims(animacionActualActiva)
-            else
-                sendNotification("Selecciona al menos una animación.")
-            end
-        end)
+    Callback = function(value)
+        autoMixApplyEnabled = value
+        if value then task.spawn(applySelectedMix) end
     end
 })
 
-task.wait() -- 🔥 AÑADE ESTO
+end
+
 Tabs.Troll:Section({ Title = "Herramientas de Fling" })
 
 local isFlingingActive = false
@@ -3925,7 +4131,6 @@ Tabs.Troll:Toggle({
 })
 
 
-
 -- Anti-Fling: keep the style already used in THIS script (not mm2)
 UIElements.ToggleAntiFling = Tabs.Troll:Toggle({
     Flag = "Anti_Fling",
@@ -4043,46 +4248,21 @@ Tabs.Bubbles:Toggle({
 
 task.wait() -- 🔥 AÑADE ESTO
 
-Tabs.Config:Section({ Title = "Interfaz" })
-
-Tabs.Config:Toggle({
-    Flag = "Fondo_del_Panel",
-    Title = "Fondo del Panel",
-    Desc = "Activa o desactiva el fondo del panel del menú.",
-    Default = true,
-    Callback = function(state)
-        pcall(function() Window:SetPanelBackground(state) end)
-    end
-})
-
-pcall(function()
-    Window:SetPanelBackground(true)
-end)
-
-Tabs.Config:Input({
-    Flag = "ID_de_Imagen_de_Fondo",
-    Title = "ID de Imagen de Fondo",
-    Desc = "Introduce el ID de Roblox (ej: rbxassetid://...) para cambiar el fondo.",
-    Value = "rbxassetid://133044138027516",
-    Placeholder = "rbxassetid://...",
-    Callback = function(input)
-        pcall(function() Window:SetBackground(input) end)
-    end
-})
-
-Tabs.Config:Divider()
-Tabs.Config:Section({ Title = "Guardar / Cargar" })
-
-
-
 end -- TrollExtra scope
+
+Tabs.Config:Section({ Title = "Configuracion" })
+Tabs.Config:Paragraph({
+    Title = "Guardado manual",
+    Desc = "Guarda y carga configuraciones con nombre (toggles, sliders y listas con Flag).",
+})
+
 local ConfigManager = Window.ConfigManager
 local ConfigName = "default"
 
 local ConfigNameInput = Tabs.Config:Input({
     Flag = "Nombre_de_Config",
     Title = "Nombre de Config",
-    Desc = "Escribe un nombre para guardar o cargar la config.",
+    Desc = "Escribe un nombre para guardar o cargar.",
     Icon = "file-cog",
     Value = "default",
     Callback = function(value)
@@ -4092,19 +4272,19 @@ local ConfigNameInput = Tabs.Config:Input({
 
 Tabs.Config:Space()
 
-local AllConfigs = {}
+local AllConfigs = {"None"}
 pcall(function()
     if ConfigManager and ConfigManager.AllConfigs then
-        AllConfigs = ConfigManager:AllConfigs() or {}
+        AllConfigs = ConfigManager:AllConfigs() or {"None"}
     end
 end)
 
 local AllConfigsDropdown = Tabs.Config:Dropdown({
     Flag = "Todas_las_Configs",
-    Title = "Todas las Configs",
-    Desc = "Selecciona una configuración guardada de la lista.",
+    Title = "Configs guardadas",
+    Desc = "Selecciona una configuracion de la lista.",
     Values = AllConfigs,
-    Value = table.find(AllConfigs, ConfigName) and ConfigName or nil,
+    Value = "None",
     Callback = function(value)
         ConfigName = value
         pcall(function()
@@ -4117,23 +4297,26 @@ Tabs.Config:Space()
 
 Tabs.Config:Button({
     Title = "Guardar Config",
-    Desc = "Guarda la configuración actual con el nombre elegido.",
+    Desc = "Guarda la configuracion actual con el nombre elegido.",
     Callback = function()
         local ok = false
         pcall(function()
             if ConfigManager then
-                Window.CurrentConfig = ConfigManager:Config(ConfigName)
+                local cfg = nil
+                if ConfigManager.CreateConfig then cfg = ConfigManager:CreateConfig(ConfigName) end
+                if not cfg and ConfigManager.Config then cfg = ConfigManager:Config(ConfigName) end
+                Window.CurrentConfig = cfg
                 if Window.CurrentConfig and Window.CurrentConfig.Save then
                     ok = Window.CurrentConfig:Save() and true or false
                 end
             end
         end)
         pcall(function()
-            if AllConfigsDropdown and AllConfigsDropdown.Refresh and ConfigManager then
-                AllConfigsDropdown:Refresh(ConfigManager:AllConfigs())
+            if AllConfigsDropdown and AllConfigsDropdown.Refresh and ConfigManager and ConfigManager.AllConfigs then
+                AllConfigsDropdown:Refresh(ConfigManager:AllConfigs() or {})
             end
         end)
-        VXSNotify("Vortex X Sage", "", 3)
+        sendNotification("Guardado", ok and ("Guardado: " .. tostring(ConfigName)) or "No se pudo guardar", 2.5)
     end
 })
 
@@ -4141,21 +4324,23 @@ Tabs.Config:Space()
 
 Tabs.Config:Button({
     Title = "Cargar Config",
-    Desc = "Carga la configuración seleccionada.",
+    Desc = "Carga la configuracion seleccionada.",
     Callback = function()
         local ok = false
         pcall(function()
             if ConfigManager then
-                Window.CurrentConfig = ConfigManager:CreateConfig(ConfigName)
+                local cfg = nil
+                if ConfigManager.CreateConfig then cfg = ConfigManager:CreateConfig(ConfigName) end
+                if not cfg and ConfigManager.Config then cfg = ConfigManager:Config(ConfigName) end
+                Window.CurrentConfig = cfg
                 if Window.CurrentConfig and Window.CurrentConfig.Load then
                     ok = Window.CurrentConfig:Load() and true or false
                 end
             end
         end)
-        VXSNotify("Vortex X Sage", "", 3)
+        sendNotification("Guardado", ok and ("Cargado: " .. tostring(ConfigName)) or "No se pudo cargar", 2.5)
     end
 })
-
 
 local function refreshConfigs()
     pcall(function()
@@ -4174,6 +4359,7 @@ task.spawn(function()
     task.wait(1)
     refreshConfigs()
 end)
+
 
 
 -- ==========================================
@@ -4207,15 +4393,11 @@ task.spawn(function()
 end)
 
 -- ==========================================
-end
--- 🔥 MOTOR GÉNESIS IA INTEGRADO
+-- MOTOR GENESIS IA INTEGRADO
 -- ==========================================
 task.spawn(function()
     
    
-
-
-
 local Players = game:GetService("Players")
 
 local CoreGui = game:GetService("CoreGui")
@@ -4229,182 +4411,6 @@ local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
-
--- ==========================================
--- VORTEX NOTIFY (pequeña, dorada, transparente)
--- Solo 1 visible: la nueva reemplaza a la anterior
--- ==========================================
-local VortexNotify = {}
-do
-	local TweenService = game:GetService("TweenService")
-	local CoreGui = game:GetService("CoreGui")
-	local currentFrame = nil
-	local currentToken = 0
-	local WIDTH, HEIGHT = 260, 58
-
-	local function getHost()
-		local host
-		pcall(function()
-			if gethui then host = gethui() end
-		end)
-		if not host then
-			host = CoreGui
-		end
-		local gui = host:FindFirstChild("VortexNotifyHost")
-		if not gui then
-			gui = Instance.new("ScreenGui")
-			gui.Name = "VortexNotifyHost"
-			gui.ResetOnSpawn = false
-			gui.IgnoreGuiInset = true
-			gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-			pcall(function()
-				if syn and syn.protect_gui then syn.protect_gui(gui) end
-			end)
-			gui.Parent = host
-		end
-		return gui
-	end
-
-	local function dismiss(frame, instant)
-		if not frame then return end
-		pcall(function()
-			if instant then
-				frame:Destroy()
-				return
-			end
-			local tw = TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-				Position = UDim2.new(1, 40, 0, 16),
-				BackgroundTransparency = 1,
-			})
-			tw:Play()
-			task.delay(0.28, function()
-				pcall(function() frame:Destroy() end)
-			end)
-		end)
-	end
-
-	function VortexNotify.Show(title, text, duration)
-		duration = tonumber(duration) or 2.5
-		title = tostring(title or "Vortex X Sage")
-		text = tostring(text or "")
-
-		-- Quitar la anterior al instante
-		if currentFrame then
-			local old = currentFrame
-			currentFrame = nil
-			dismiss(old, true)
-		end
-
-		currentToken = currentToken + 1
-		local token = currentToken
-
-		local gui = getHost()
-		local frame = Instance.new("Frame")
-		frame.Name = "VN"
-		frame.AnchorPoint = Vector2.new(1, 0)
-		frame.Size = UDim2.fromOffset(WIDTH, HEIGHT)
-		frame.Position = UDim2.new(1, 20, 0, 16)
-		frame.BackgroundColor3 = Color3.fromRGB(18, 14, 8)
-		frame.BackgroundTransparency = 0.35
-		frame.BorderSizePixel = 0
-		frame.Parent = gui
-		currentFrame = frame
-
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 10)
-		corner.Parent = frame
-
-		local stroke = Instance.new("UIStroke")
-		stroke.Color = Color3.fromRGB(255, 200, 55)
-		stroke.Thickness = 1.2
-		stroke.Transparency = 0.35
-		stroke.Parent = frame
-
-		local accent = Instance.new("Frame")
-		accent.Size = UDim2.new(0, 3, 1, -12)
-		accent.Position = UDim2.new(0, 6, 0, 6)
-		accent.BackgroundColor3 = Color3.fromRGB(255, 195, 45)
-		accent.BackgroundTransparency = 0.15
-		accent.BorderSizePixel = 0
-		accent.Parent = frame
-		Instance.new("UICorner", accent).CornerRadius = UDim.new(1, 0)
-
-		local titleL = Instance.new("TextLabel")
-		titleL.BackgroundTransparency = 1
-		titleL.Position = UDim2.new(0, 14, 0, 6)
-		titleL.Size = UDim2.new(1, -22, 0, 18)
-		titleL.Font = Enum.Font.GothamBold
-		titleL.TextSize = 13
-		titleL.TextXAlignment = Enum.TextXAlignment.Left
-		titleL.TextColor3 = Color3.fromRGB(255, 220, 90)
-		titleL.Text = title
-		titleL.Parent = frame
-
-		local bodyL = Instance.new("TextLabel")
-		bodyL.BackgroundTransparency = 1
-		bodyL.Position = UDim2.new(0, 14, 0, 26)
-		bodyL.Size = UDim2.new(1, -22, 0, 28)
-		bodyL.Font = Enum.Font.Gotham
-		bodyL.TextSize = 12
-		bodyL.TextXAlignment = Enum.TextXAlignment.Left
-		bodyL.TextYAlignment = Enum.TextYAlignment.Top
-		bodyL.TextWrapped = true
-		bodyL.TextColor3 = Color3.fromRGB(230, 220, 190)
-		bodyL.TextTransparency = 0.1
-		bodyL.Text = text
-		bodyL.Parent = frame
-
-		TweenService:Create(frame, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-			Position = UDim2.new(1, -16, 0, 16)
-		}):Play()
-
-		task.delay(duration, function()
-			if token ~= currentToken then return end
-			if currentFrame ~= frame then return end
-			currentFrame = nil
-			local tw = TweenService:Create(frame, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
-				Position = UDim2.new(1, 40, 0, 16),
-				BackgroundTransparency = 1
-			})
-			tw:Play()
-			pcall(function()
-				titleL.TextTransparency = 1
-				bodyL.TextTransparency = 1
-				stroke.Transparency = 1
-				accent.BackgroundTransparency = 1
-			end)
-			tw.Completed:Wait()
-			pcall(function() frame:Destroy() end)
-		end)
-	end
-end
-
--- Redirigir WindUI Notify -> VortexNotify
-pcall(function()
-    if WindUI and type(WindUI.Notify) == "function" then
-        local _old = WindUI.Notify
-        WindUI.Notify = function(self, opts)
-            opts = opts or {}
-            if type(self) == "table" and not opts.Title and self.Title then
-                opts = self
-                self = WindUI
-            end
-            pcall(function()
-                if VortexNotify and VortexNotify.Show then
-                    VortexNotify.Show(tostring(opts.Title or "Vortex X Sage"), tostring(opts.Content or opts.Text or ""), tonumber(opts.Duration) or 2.5)
-                end
-            end)
-            -- no llamar old para evitar doble notificacion
-        end
-    end
-end)
-
-local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
-
-local Camera = Workspace.CurrentCamera
-
-
-
 
 
 -- ==========================================
@@ -4503,10 +4509,6 @@ GetClosestTarget = function()
 end
 
 
-
-
-
-
 -- ==========================================
 
 -- ⚙️ GENESIS CONFIG (V12.2)
@@ -4542,7 +4544,6 @@ local TargetParts = {"HumanoidRootPart", "UpperTorso", "LowerTorso", "Head"}
 local GRAVITY = Workspace.Gravity
 
 
-
 local currentPing = 0.05
 
 task.spawn(function()
@@ -4568,19 +4569,11 @@ RunService.Heartbeat:Connect(function(deltaTime)
 end)
 
 
-
-
-
-
-
 -- ==========================================
 
 -- 🌐 VPS BRIDGE - Conexión con Genesis Server
 
 -- ==========================================
-
-
-
 
 
 local VPS = {
@@ -4596,12 +4589,10 @@ local VPS = {
 }
 
 
-
 local function SendToVPS(...)
     -- disabled (no external web)
     return nil
 end
-
 
 
 -- Función segura para recolectar el estado actual de tu Auto-Tuner
@@ -4611,7 +4602,6 @@ local function CollectStats()
     local totalS, totalH, iter, bestHR = 0, 0, 0, 0
 
     
-
     pcall(function()
 
         if AutoTuner then
@@ -4643,7 +4633,6 @@ local function CollectStats()
     end)
 
     
-
     return {
 
         total_shots = totalS,
@@ -4659,7 +4648,6 @@ local function CollectStats()
     }
 
 end
-
 
 
 -- 1. Heartbeat Loop (Avisa cada 15 segundos que sigues vivo)
@@ -4681,7 +4669,6 @@ task.spawn(function()
         local success, resData = SendToVPS("/heartbeat", payload)
 
         
-
         -- 🔥 AQUÍ SUCEDE LA MAGIA: Lua se reescribe con la mente de Génesis
 
         if success and resData and resData.config_overrides then
@@ -4701,13 +4688,11 @@ task.spawn(function()
         end
 
         
-
         task.wait(15)
 
     end
 
 end)
-
 
 
 -- 2. Reporte de Estadísticas (Avisa cada 60 segundos con updates)
@@ -4735,13 +4720,6 @@ task.spawn(function()
 end)
 
 
-
-
-
-
-
-
-
 -- ==========================================
 
 -- 🌌 MEDIDOR DE GRAVEDAD EFECTIVA
@@ -4749,7 +4727,6 @@ end)
 -- ==========================================
 
 local MeasuredGravity = {}
-
 
 
 local function UpdateMeasuredGravity(player, part, dt)
@@ -4769,7 +4746,6 @@ local function UpdateMeasuredGravity(player, part, dt)
     local curVelY = part.AssemblyLinearVelocity.Y
 
     
-
     if curVelY < -1 and dt > 0.01 and dt < 0.1 then
 
         local measuredG = (m.lastVelY - curVelY) / dt
@@ -4795,7 +4771,6 @@ local function UpdateMeasuredGravity(player, part, dt)
 end
 
 
-
 local function GetEffectiveGravity(player)
 
     local m = MeasuredGravity[player.UserId]
@@ -4803,7 +4778,6 @@ local function GetEffectiveGravity(player)
     return (m and m.g) or GRAVITY
 
 end
-
 
 
 -- ==========================================
@@ -4815,13 +4789,11 @@ end
 local OneEuroFilters = {}
 
 
-
 local function makeOneEuro(minCutoff, beta)
 
     return {minCutoff = minCutoff or 1.0, beta = beta or 0.007, dCutoff = 1.0, xPrev = nil, dxPrev = Vector3.zero, tPrev = nil}
 
 end
-
 
 
 local function alphaFromCutoff(cutoff, dt)
@@ -4831,7 +4803,6 @@ local function alphaFromCutoff(cutoff, dt)
     return 1 / (1 + tau / dt)
 
 end
-
 
 
 local function oneEuroFilter(f, x, t)
@@ -4859,7 +4830,6 @@ local function oneEuroFilter(f, x, t)
 end
 
 
-
 local function getEuroFilter(id, speed)
     if not OneEuroFilters[id] then 
         OneEuroFilters[id] = makeOneEuro(15.0, 0.03) -- 🔥 Base súper rígida para que no haya delay al apuntar
@@ -4884,7 +4854,6 @@ local function getEuroFilter(id, speed)
 end
 
 
-
 -- ==========================================
 
 -- ⚙️ AUTO-TUNING
@@ -4896,13 +4865,11 @@ local ShotHistory = {}
 local MAX_SHOT_HISTORY = 20
 
 
-
 local AdaptiveTuning = {
 
     PredMultBias = 0, BufferBias = 0, DecayBias = 0, LearningRate = 0.015, Enabled = true
 
 }
-
 
 
 local function RegisterShot(targetPlayer, predictedPos, targetPartRef)
@@ -4914,7 +4881,6 @@ local function RegisterShot(targetPlayer, predictedPos, targetPartRef)
     if #ShotHistory > MAX_SHOT_HISTORY then table.remove(ShotHistory, 1) end
 
 end
-
 
 
 task.spawn(function()
@@ -4984,11 +4950,9 @@ task.spawn(function()
 end)
 
 
-
 local function GetTunedPredMult() return NathConfig.PredMultiplier + AdaptiveTuning.PredMultBias end
 
 local function GetTunedBuffer() return NathConfig.ReplicationBuffer + AdaptiveTuning.BufferBias end
-
 
 
 -- ==========================================
@@ -4998,7 +4962,6 @@ local function GetTunedBuffer() return NathConfig.ReplicationBuffer + AdaptiveTu
 -- ==========================================
 
 local BhopData = {}
-
 
 
 local function UpdateBhop(playerId, velY, isAirborne)
@@ -5014,7 +4977,6 @@ local function UpdateBhop(playerId, velY, isAirborne)
     local now = tick()
 
     
-
     if isAirborne and not b.lastAir and velY > 10 then
 
         if b.lastJumpTime > 0 then
@@ -5046,7 +5008,6 @@ local function UpdateBhop(playerId, velY, isAirborne)
 end
 
 
-
 local function GetBhopPrediction(playerId, currentVelY, isAirborne)
 
     local b = BhopData[playerId]
@@ -5054,7 +5015,6 @@ local function GetBhopPrediction(playerId, currentVelY, isAirborne)
     if not b or #b.jumps < 2 then return 0, false end
 
     
-
     local variance = 0
 
     for _, j in ipairs(b.jumps) do variance = variance + (j - b.avgInterval)^2 end
@@ -5062,7 +5022,6 @@ local function GetBhopPrediction(playerId, currentVelY, isAirborne)
     variance = variance / #b.jumps
 
     
-
     if variance < 0.05 then 
 
         local timeSinceJump = tick() - b.lastJumpTime
@@ -5078,7 +5037,6 @@ local function GetBhopPrediction(playerId, currentVelY, isAirborne)
 end
 
 
-
 -- ==========================================
 
 -- 🚀 JUMP IMPULSE DETECTOR
@@ -5086,7 +5044,6 @@ end
 -- ==========================================
 
 local JumpImpulse = {}
-
 
 
 local function DetectJumpImpulse(player, currentVelY, dt)
@@ -5106,7 +5063,6 @@ local function DetectJumpImpulse(player, currentVelY, dt)
     local deltaVy = currentVelY - j.lastVy
 
     
-
     if deltaVy > 30 and dt < 0.1 then
 
         j.justJumped = true; j.jumpTime = tick(); j.jumpPower = currentVelY
@@ -5120,7 +5076,6 @@ local function DetectJumpImpulse(player, currentVelY, dt)
     j.lastVy = currentVelY
 
 end
-
 
 
 local function GetJumpCompensation(player, leadT)
@@ -5142,7 +5097,6 @@ local function GetJumpCompensation(player, leadT)
 end
 
 
-
 -- ==========================================
 
 -- 💨 AIR CONTROL ESTIMATOR
@@ -5150,7 +5104,6 @@ end
 -- ==========================================
 
 local AirControl = {}
-
 
 
 local function UpdateAirControl(playerId, vel, isAir, dt)
@@ -5192,7 +5145,6 @@ local function UpdateAirControl(playerId, vel, isAir, dt)
 end
 
 
-
 local function GetAirControlPenalty(playerId)
 
     local a = AirControl[playerId]
@@ -5208,7 +5160,6 @@ local function GetAirControlPenalty(playerId)
 end
 
 
-
 -- ==========================================
 
 -- 🧠 EKF CON JERK (V12)
@@ -5222,13 +5173,6 @@ local HISTORY_SIZE = 10
 local EKFStates = {}
 
 
-
-
-
-
-
-
-
 -- ==========================================
 
 -- 🧠 LSTM-LITE
@@ -5238,7 +5182,6 @@ local EKFStates = {}
 local LSTM = {Wf={},Wi={},Wo={},Wc={}, bf={},bi={},bo={},bc={}, Wy={}, by={}, lr=0.005, initialized=false}
 
 local LSTMStates = {}
-
 
 
 local function InitLSTM()
@@ -5276,15 +5219,9 @@ local function InitLSTM()
 end
 
 
-
 local function sigmoid(x) if x>10 then return 1 elseif x<-10 then return 0 end; return 1/(1+math.exp(-x)) end
 
 local function tanhf(x) if x>10 then return 1 elseif x<-10 then return -1 end; local e1,e2=math.exp(x),math.exp(-x); return (e1-e2)/(e1+e2) end
-
-
-
-
-
 
 
 local NNHistoryByPlayer = {}
@@ -5302,9 +5239,7 @@ local function GetNeuralCorrection(playerId, vel, accel, leadTime)
 end
 
 
-
 InitLSTM()
-
 
 
 -- ==========================================
@@ -5316,7 +5251,6 @@ InitLSTM()
 local AerialNN = {W1={}, b1={}, W2={}, b2={}, lr=0.012, initialized=false}
 
 local aerialTrainingCount = 0
-
 
 
 local function InitAerialNN()
@@ -5348,13 +5282,7 @@ local function InitAerialNN()
 end
 
 
-
 local function relu(x) return x > 0 and x or x * 0.01 end 
-
-
-
-
-
 
 
 local function AerialTrain(input, target, hidden)
@@ -5364,7 +5292,6 @@ local function AerialTrain(input, target, hidden)
     local errOut = {target[1]-pred[1], target[2]-pred[2], target[3]-pred[3]}
 
     
-
     local dH = {}
 
     for j = 1, 16 do
@@ -5378,7 +5305,6 @@ local function AerialTrain(input, target, hidden)
     end
 
     
-
     for i = 1, 3 do
 
         for j = 1, 16 do AerialNN.W2[i][j] = AerialNN.W2[i][j] + AerialNN.lr * errOut[i] * h[j] end
@@ -5398,9 +5324,7 @@ local function AerialTrain(input, target, hidden)
 end
 
 
-
 InitAerialNN()
-
 
 
 local AerialHistory = {}
@@ -5430,7 +5354,6 @@ local function GetAerialCorrection(playerId, myVel, myAir, tVel, tAir, dist, lea
     return Vector3.new(out[1]*leadT*3, out[2]*leadT*3, out[3]*leadT*3)
 
 end
-
 
 
 task.spawn(function()
@@ -5484,23 +5407,20 @@ task.spawn(function()
 end)
 
 
-
 -- ==========================================
 
 -- 💾 NEURAL PERSISTENCE SYSTEM
 
 -- ==========================================
 
-local SAVE_FILE = "NathalyHub_NeuralBrain.json"
+local SAVE_FILE = "FlexusHub_MM2_Neural.json"
 
 local SAVE_INTERVAL = 25 
 
 local lastSaveTime = 0
 
 
-
 local hasFileSystem = (writefile and readfile and isfile and delfile) ~= nil
-
 
 
 local function SaveBrain()
@@ -5508,7 +5428,6 @@ local function SaveBrain()
     if not hasFileSystem then return end
 
     
-
     local data = {
 
         version = "V12.2",
@@ -5516,7 +5435,6 @@ local function SaveBrain()
         savedAt = os.time(),
 
         
-
         lstm = {
 
             Wf = LSTM.Wf, Wi = LSTM.Wi, Wo = LSTM.Wo, Wc = LSTM.Wc,
@@ -5528,7 +5446,6 @@ local function SaveBrain()
         },
 
         
-
         aerial = {
 
             W1 = AerialNN.W1, b1 = AerialNN.b1,
@@ -5538,7 +5455,6 @@ local function SaveBrain()
         },
 
         
-
         aerialTrainingCount = aerialTrainingCount or 0,
 
         totalShots = #ShotHistory or 0
@@ -5546,7 +5462,6 @@ local function SaveBrain()
     }
 
     
-
     local ok, encoded = pcall(function()
 
         return HttpService:JSONEncode(data)
@@ -5554,7 +5469,6 @@ local function SaveBrain()
     end)
 
     
-
     if ok and encoded then
 
         local writeOk = pcall(function() writefile(SAVE_FILE, encoded) end)
@@ -5570,7 +5484,6 @@ local function SaveBrain()
 end
 
 
-
 local function LoadBrain()
 
     if not hasFileSystem then 
@@ -5582,7 +5495,6 @@ local function LoadBrain()
     end
 
     
-
     if not isfile(SAVE_FILE) then
 
         print("[GENESIS] 🆕 Sin cerebro previo, iniciando aprendizaje desde cero")
@@ -5592,7 +5504,6 @@ local function LoadBrain()
     end
 
     
-
     local ok, data = pcall(function()
 
         local content = readfile(SAVE_FILE)
@@ -5602,7 +5513,6 @@ local function LoadBrain()
     end)
 
     
-
     if not ok or not data then
 
         warn("[GENESIS] Archivo corrupto, iniciando desde cero")
@@ -5612,7 +5522,6 @@ local function LoadBrain()
     end
 
     
-
     if data.lstm and LSTM then
 
         LSTM.Wf = data.lstm.Wf or LSTM.Wf
@@ -5638,7 +5547,6 @@ local function LoadBrain()
     end
 
     
-
     if data.aerial and AerialNN then
 
         AerialNN.W1 = data.aerial.W1 or AerialNN.W1
@@ -5652,11 +5560,9 @@ local function LoadBrain()
     end
 
     
-
     aerialTrainingCount = data.aerialTrainingCount or 0
 
     
-
     local age = data.savedAt and os.difftime(os.time(), data.savedAt) or 0
 
     local ageStr = age < 3600 and string.format("%.0f min", age/60) 
@@ -5666,7 +5572,6 @@ local function LoadBrain()
                  or string.format("%.1f días", age/86400)
 
     
-
     print("[GENESIS] 🧠 Cerebro cargado | Entrenamientos previos: "..aerialTrainingCount.." | Edad: "..ageStr)
 
     return true
@@ -5674,13 +5579,7 @@ local function LoadBrain()
 end
 
 
-
 LoadBrain()
-
-
-
-
-
 
 
 task.spawn(function()
@@ -5694,9 +5593,7 @@ task.spawn(function()
 end)
 
 
-
 -- Aquí borramos el BindToClose que crasheaba todo alv
-
 
 
 LocalPlayer.AncestryChanged:Connect(function()
@@ -5704,11 +5601,6 @@ LocalPlayer.AncestryChanged:Connect(function()
     if not LocalPlayer.Parent then SaveBrain() end
 
 end)
-
-
-
-
-
 
 
 -- ==========================================
@@ -5748,7 +5640,6 @@ local function DetectPattern(playerId, vel)
     return rhythm, crossings
 
 end
-
 
 
 local function ParticlePredict(targetPos, vel, accel, t, isAirborne, effGravity, N)
@@ -5794,7 +5685,6 @@ local function ParticlePredict(targetPos, vel, accel, t, isAirborne, effGravity,
 end
 
 
-
 -- ==========================================
 
 -- 🧠 COMPENSACIÓN, CONFIANZA Y ESTADOS
@@ -5802,7 +5692,6 @@ end
 -- ==========================================
 
 local SelfStateHistory = {samples = {}, lastPos = nil, lastTime = 0}
-
 
 
 local function UpdateSelfState()
@@ -5836,7 +5725,6 @@ local function UpdateSelfState()
 end
 
 
-
 local function GetSelfBallistic()
 
     local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -5846,13 +5734,11 @@ local function GetSelfBallistic()
     if not myRoot then return Vector3.zero, 1.0 end
 
     
-
     local myVel = myRoot.AssemblyLinearVelocity
 
     local airborne = myHum and myHum.FloorMaterial == Enum.Material.Air
 
     
-
     local myAccel = Vector3.zero
 
     if #SelfStateHistory.samples >= 2 then
@@ -5868,7 +5754,6 @@ local function GetSelfBallistic()
     end
 
     
-
     local shotDelay = NathConfig.ShootDelay + currentPing
 
     local futureOriginOffset = myVel * shotDelay + 0.5 * myAccel * shotDelay * shotDelay
@@ -5880,7 +5765,6 @@ local function GetSelfBallistic()
     end
 
     
-
     local stability = 1.0
 
     local horizSpeed = Vector3.new(myVel.X, 0, myVel.Z).Magnitude
@@ -5896,11 +5780,9 @@ local function GetSelfBallistic()
     end
 
     
-
     return futureOriginOffset, stability
 
 end
-
 
 
 local function GetDirectionConfidence(player)
@@ -5922,7 +5804,6 @@ local function GetDirectionConfidence(player)
 end
 
 
-
 local function GetDirectionChangeFactor(player, currentVel)
 
     local data = VelocityHistory[player.UserId]
@@ -5942,7 +5823,6 @@ local function GetDirectionChangeFactor(player, currentVel)
 end
 
 
-
 local function GetAccelerationPenalty(player)
 
     local data = VelocityHistory[player.UserId]
@@ -5960,7 +5840,6 @@ local function GetAccelerationPenalty(player)
     return 1
 
 end
-
 
 
 local function GetAverageAcceleration(player)
@@ -5992,13 +5871,11 @@ local function GetAverageAcceleration(player)
 end
 
 
-
 local function GetJumpPhase(velY)
 
     if velY > 5 then return "ASCENDING" elseif velY < -5 then return "FALLING" else return "PEAK" end
 
 end
-
 
 
 local function ClassifyMovementState(player, vel, isAirborne)
@@ -6032,7 +5909,6 @@ local function ClassifyMovementState(player, vel, isAirborne)
     if validSamples > 0 then variance = variance / validSamples end
 
     
-
     if speed < 1 then return "STATIONARY", 1.0
 
     elseif isAirborne and math.abs(vel.Y) > 15 then return "BHOP", 0.55
@@ -6048,7 +5924,6 @@ local function ClassifyMovementState(player, vel, isAirborne)
 end
 
 
-
 local function GetAdaptiveReplicationBuffer(distance, vel)
     local baseBuffer = GetTunedBuffer()
     -- 🔥 Casi cero delay artificial, pura reacción cruda
@@ -6061,7 +5936,6 @@ local function GetAdaptiveReplicationBuffer(distance, vel)
 end
 
 
-
 local function GetDynamicLeadCap(distance)
 
     if not NathConfig.DynamicLeadCap then return NathConfig.MaxLeadTime end
@@ -6071,7 +5945,6 @@ local function GetDynamicLeadCap(distance)
     return math.clamp(timeOfFlight * 1.3, 0.1, 2.5)
 
 end
-
 
 
 -- ==========================================
@@ -6089,7 +5962,6 @@ local function SolveRelativePhysics(myOrigin, myVel, myAirborne, targetPos, targ
     local bestErr = math.huge
 
     
-
     for iter = 1, 8 do
 
         local myFutureOrigin
@@ -6113,7 +5985,6 @@ local function SolveRelativePhysics(myOrigin, myVel, myAirborne, targetPos, targ
         end
 
         
-
         local targetFuturePos
 
         if targetAirborne then
@@ -6135,13 +6006,11 @@ local function SolveRelativePhysics(myOrigin, myVel, myAirborne, targetPos, targ
         end
 
         
-
         local newDist = (targetFuturePos - myFutureOrigin).Magnitude
 
         local newT = newDist / NathConfig.BulletSpeed
 
         
-
         local err = math.abs(newT - t)
 
         if err < bestErr then
@@ -6153,7 +6022,6 @@ local function SolveRelativePhysics(myOrigin, myVel, myAirborne, targetPos, targ
         end
 
         
-
         if err < 0.003 then break end
 
         t = t * 0.5 + newT * 0.5 
@@ -6161,11 +6029,9 @@ local function SolveRelativePhysics(myOrigin, myVel, myAirborne, targetPos, targ
     end
 
     
-
     return bestT
 
 end
-
 
 
 -- ==========================================
@@ -6178,7 +6044,6 @@ local function GetOptimalHitPoint(part, origin, velocity, leadTime)
     -- 🔥 FIX: Retornamos el centro exacto de la parte sin mover la mira a los bordes. Cero picos.
     return part.Position
 end
-
 
 
 local function IsTrajectoryClear(origin, predictedPos, targetChar)
@@ -6217,7 +6082,6 @@ local function IsTrajectoryClear(origin, predictedPos, targetChar)
 end
 
 
-
 local function GetSafePredictedPos(origin, currentPos, predictedPos, targetChar)
 
     if IsTrajectoryClear(origin, predictedPos, targetChar) then return predictedPos, 1.0 end
@@ -6233,7 +6097,6 @@ local function GetSafePredictedPos(origin, currentPos, predictedPos, targetChar)
     return currentPos, 0
 
 end
-
 
 
 local VisibilityMemory = {}
@@ -6267,7 +6130,6 @@ local function UpdateVisibilityMemory(player, isVisibleNow)
 end
 
 
-
 local function JustPeeked(player, windowSec)
 
     local mem = VisibilityMemory[player.UserId]
@@ -6277,7 +6139,6 @@ local function JustPeeked(player, windowSec)
     return (tick() - mem.justAppeared) <= (windowSec or 0.35)
 
 end
-
 
 
 -- ==========================================
@@ -6315,7 +6176,6 @@ local function HMMUpdate(playerId, vel, dt)
     else obs[1] = 0.7; obs[2] = 0.15; obs[3] = 0.15 end
 
     
-
     local newProbs, total = {}, 0
 
     for i = 1, 4 do
@@ -6331,7 +6191,6 @@ local function HMMUpdate(playerId, vel, dt)
     h.probs = newProbs; h.lastVel = vel
 
     
-
     local maxI, maxP = 1, 0
 
     for i = 1, 4 do if newProbs[i] > maxP then maxP = newProbs[i]; maxI = i end end
@@ -6345,7 +6204,6 @@ local function HMMUpdate(playerId, vel, dt)
     else return Vector3.zero end
 
 end
-
 
 
 Players.PlayerRemoving:Connect(function(p)
@@ -6375,7 +6233,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 
 
-
 -- ==========================================
 
 -- 🎨 UI & VISUALS
@@ -6384,14 +6241,13 @@ end)
 
 local UI_Container = Instance.new("ScreenGui")
 
-UI_Container.Name = "NathalyVisuals"
+UI_Container.Name = "FlexusVisuals"
 
 UI_Container.IgnoreGuiInset = true
 
 pcall(function() UI_Container.Parent = (gethui and gethui()) or CoreGui end)
 
 if not UI_Container.Parent then UI_Container.Parent = LocalPlayer:WaitForChild("PlayerGui") end
-
 
 
 local CurrentPosBox = Instance.new("Frame")
@@ -6411,7 +6267,6 @@ CurrentPosBox.Visible = false
 CurrentPosBox.Parent = UI_Container
 
 
-
 local PredictionCrosshair = Instance.new("Frame")
 
 PredictionCrosshair.Size = UDim2.new(0, 12, 0, 12)
@@ -6429,7 +6284,6 @@ PredictionCrosshair.Visible = false
 PredictionCrosshair.Parent = UI_Container
 
 
-
 local UIStroke = Instance.new("UICorner")
 
 UIStroke.CornerRadius = UDim.new(1, 0)
@@ -6437,13 +6291,11 @@ UIStroke.CornerRadius = UDim.new(1, 0)
 UIStroke.Parent = PredictionCrosshair
 
 
-
 local rayParams = RaycastParams.new()
 
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
 rayParams.IgnoreWater = true
-
 
 
 local function IsVisible(predictedPos, targetChar)
@@ -6463,11 +6315,6 @@ local function IsVisible(predictedPos, targetChar)
     return false
 
 end
-
-
-
-
-
 
 
 local function GetPredictedPosition(targetChar)
@@ -6557,7 +6404,6 @@ GetSmartShotPosition = function(targetChar)
 end
 
 
-
 -- ==========================================
 
 -- ⏱️ CONVERGENCE QUALITY GATE 2.0 (FIX)
@@ -6566,7 +6412,6 @@ end
 
 local lastShotTime = 0
 local SHOT_COOLDOWN = 0.01 -- 🔥 Dispara en cuanto tiene la oportunidad
-
 
 
 local function CalculateShotQuality(targetChar, predictedPos)
@@ -6618,7 +6463,6 @@ local function CalculateShotQuality(targetChar, predictedPos)
     
     return math.clamp(quality, 0, 1)
 end
-
 
 
 local function DispararEventoDirecto(forceShoot)
@@ -6677,7 +6521,6 @@ local function DispararEventoDirecto(forceShoot)
         local originalCFrame = cam.CFrame
         
         
-
         -- 3. DISPARAR (El servidor recibe el tiro instantáneamente)
         local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
         if targetHRP then
@@ -6729,7 +6572,6 @@ local function DispararEventoDirecto(forceShoot)
 end
 
 
-
 -- ==========================================
 
 -- ⌨️ COMANDOS MANUALES (PERSISTENCIA)
@@ -6757,7 +6599,6 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 
 end)
-
 
 
 -- ==========================================
@@ -6831,7 +6672,7 @@ end
 -- ==========================================
 -- BindToRenderStep con prioridad Camera + 1 asegura que el UI se dibuje 
 -- EXACTAMENTE después de que el juego mueve a los personajes. Cero lag visual.
-RunService:BindToRenderStep("NathalyAimbotVisuals", Enum.RenderPriority.Camera.Value + 1, function()
+RunService:BindToRenderStep("FlexusAimbotVisuals", Enum.RenderPriority.Camera.Value + 1, function()
     UpdateSelfState()
     
     if not NathConfig.ShowVisuals then
@@ -6880,9 +6721,6 @@ RunService:BindToRenderStep("NathalyAimbotVisuals", Enum.RenderPriority.Camera.V
 end)
 
 
-
-
-
 -- ==========================================
 -- 🔥 SISTEMA AUTOSHOOT INSTANTÁNEO (HEARTBEAT ZERO-DELAY)
 -- ==========================================
@@ -6898,7 +6736,6 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
-
 
 
 pcall(function()
@@ -6952,9 +6789,6 @@ pcall(function()
 end)
 
 
-
-
-
 -- ============================================================
 
 -- 👁️ SENSOR DE LECTURA DE RENDIMIENTO Y FÍSICA PARA GÉNESIS
@@ -6970,7 +6804,6 @@ local ShotTelemetry = {
 }
 
 
-
 -- Esta función la conectas justo en la parte donde tu Aimbot dispara (FireServer)
 
 function RegistrarDisparoEfectuado()
@@ -6978,7 +6811,6 @@ function RegistrarDisparoEfectuado()
     ShotTelemetry.Shots = ShotTelemetry.Shots + 1
 
 end
-
 
 
 -- Esta función la conectas en tu detector de kills o cuando verifiques que bajó la vida del target
@@ -6990,16 +6822,6 @@ function RegistrarImpactoExitoso()
 end
 
 
-
-
-
-
-
-
-
-
-
-
 -- ============================================================
 
 -- 🧠 FASE 1 + 5: GAME IDENTITY & CHAT LEARNING
@@ -7009,7 +6831,6 @@ end
 local MarketplaceService = game:GetService("MarketplaceService")
 
 local TextChatService = game:GetService("TextChatService")
-
 
 
 -- ── FASE 1: Identidad del juego ──
@@ -7031,7 +6852,6 @@ local function GenerateFingerprint()
     }
 
     
-
     local count = 0
 
     for _, obj in ipairs(Workspace:GetDescendants()) do
@@ -7047,7 +6867,6 @@ local function GenerateFingerprint()
     end
 
     
-
     local tools = {}
 
     for _, p in ipairs(Players:GetPlayers()) do
@@ -7073,7 +6892,6 @@ local function GenerateFingerprint()
 end
 
 
-
 task.spawn(function()
 
     task.wait(5)
@@ -7083,7 +6901,6 @@ task.spawn(function()
     pcall(function() gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name end)
 
     
-
     SendToVPS("/game/register", {
 
         place_id = game.PlaceId,
@@ -7101,11 +6918,9 @@ task.spawn(function()
 end)
 
 
-
 -- ── FASE 5: Aprendizaje de Chat ──
 
 local ChatBuffer = {}
-
 
 
 local function BufferChatMessage(speaker, message)
@@ -7129,7 +6944,6 @@ local function BufferChatMessage(speaker, message)
 end
 
 
-
 task.spawn(function()
 
     while task.wait(5) do
@@ -7147,7 +6961,6 @@ task.spawn(function()
     end
 
 end)
-
 
 
 pcall(function()
@@ -7175,15 +6988,9 @@ pcall(function()
 end)
 
 
-
 for _, p in ipairs(Players:GetPlayers()) do pcall(function() p.Chatted:Connect(function(msg) BufferChatMessage(p.Name, msg) end) end) end
 
 Players.PlayerAdded:Connect(function(p) pcall(function() p.Chatted:Connect(function(msg) BufferChatMessage(p.Name, msg) end) end) end)
-
-
-
-
-
 
 
 -- ============================================================
@@ -7209,18 +7016,14 @@ local function hookCharacter(char)
 end
 
 
-
 if LocalPlayer.Character then hookCharacter(LocalPlayer.Character) end
 
 LocalPlayer.CharacterAdded:Connect(hookCharacter)
 
 
-
 -- NOTA: Para las Kills, mete esto donde tu aimbot confirme la kill:
 
 -- SendToVPS("/event/kill", { place_id = game.PlaceId })
-
-
 
 
 -- (Removed old Murderer Gun Aimbot / Silent Aim / Touch Fling extras)
@@ -7235,6 +7038,311 @@ end)
 
 
 
+-- ==========================================
+-- EXTRA: Externo + Juegos compatibles (igual que Duels)
+-- ==========================================
+;(function()
+    local BASE_SCRIPTS = "https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/Scripts-Flexus/Top-one/"
+    local AVATAR_URL = BASE_SCRIPTS .. "AvatarCopier.lua"
+
+    local GAMES = {
+        {
+            Name = "Duels",
+            Desc = "Asesinos VS Sheriffs · combate, ESP, farm y mas.",
+            PlaceId = 135856908115931,
+            GameId = 7219654364,
+        },
+        {
+            Name = "MM2",
+            Desc = "Murder Mystery 2 · roles, farm y utilidades.",
+            PlaceId = 142823291,
+            GameId = nil,
+        },
+        {
+            Name = "Steal an Egg",
+            Desc = "Steal an Egg · farm, steal y herramientas.",
+            PlaceId = 107778070777162,
+            GameId = nil,
+        },
+        {
+            Name = "Survival Disaster",
+            Desc = "Natural Disaster Survival · fly, aura de items y utilidades.",
+            PlaceId = 189707,
+            GameId = nil,
+        },
+    }
+
+    local function isCurrentGame(g)
+        if g.GameId and tonumber(game.GameId) == tonumber(g.GameId) then
+            return true
+        end
+        if tonumber(game.PlaceId) == tonumber(g.PlaceId) then
+            return true
+        end
+        return false
+    end
+
+    local function currentGameName()
+        for _, g in ipairs(GAMES) do
+            if isCurrentGame(g) then
+                return g.Name
+            end
+        end
+        return "Desconocido"
+    end
+
+    local extraTab = Tabs.Extra
+    if not extraTab then return end
+
+    extraTab:Section({ Title = "Externo", Icon = "external-link" })
+
+    extraTab:Paragraph({
+        Title = "Herramientas externas",
+        Desc = "Utilidades que se cargan aparte del hub de MM2.",
+    })
+
+    extraTab:Button({
+        Title = "Avatar Copier",
+        Desc = "Abre FlexusHub Avatar Copi en este servidor (copiar, guardar y restaurar avatares).",
+        Callback = function()
+            sendNotification("Externo", "Cargando Avatar Copier...", 2.5)
+            task.spawn(function()
+                local ok, err = pcall(function()
+                    local srcCode = game:HttpGet(AVATAR_URL)
+                    loadstring(srcCode)()
+                end)
+                if not ok then
+                    sendNotification("Externo", "No se pudo cargar Avatar Copier.", 3)
+                    warn("[FlexusHub] AvatarCopier:", err)
+                else
+                    sendNotification("Externo", "Avatar Copier listo.", 2.5)
+                end
+            end)
+        end,
+    })
+
+    extraTab:Divider()
+    extraTab:Section({ Title = "Juegos compatibles", Icon = "gamepad-2" })
+
+    extraTab:Paragraph({
+        Title = "Juego actual",
+        Desc = "Estas en: " .. currentGameName() .. ".\n"
+            .. "FlexusHub tiene script propio para los juegos de la lista. Usa el loader para cargarlos.",
+    })
+
+    for _, g in ipairs(GAMES) do
+        local here = isCurrentGame(g)
+        local title = g.Name
+        local desc = g.Desc
+        if here then
+            title = g.Name .. " (actual)"
+            desc = g.Desc .. " · Estas en este juego ahora."
+        end
+        extraTab:Paragraph({
+            Title = title,
+            Desc = desc,
+        })
+    end
+end)()
+
+
+-- ===== MUSIC =====
+;(function()
+    local musicTab = Tabs.Music
+    if not musicTab then return end
+    local SoundService = game:GetService("SoundService")
+    local MusicPlayer = Instance.new("Sound")
+    MusicPlayer.Name = "FlexusHub_MusicPlayer_MM2"
+    MusicPlayer.Looped = false
+    MusicPlayer.Volume = 0.5
+    MusicPlayer.SoundId = ""
+    MusicPlayer.Parent = SoundService
+
+    local SongList = {
+        { Name = "Cancion 1", Id = "84944985070181" },
+        { Name = "Cancion 2", Id = "87570666848900" },
+        { Name = "Cancion 3", Id = "82746224492420" },
+        { Name = "Cancion 4", Id = "71393805905055" },
+        { Name = "Cancion 5", Id = "75688616622595" },
+        { Name = "Cancion 6", Id = "135609653444873" },
+        { Name = "Cancion 7", Id = "93699644879957" },
+        { Name = "Cancion 8", Id = "110398343528156" },
+        { Name = "Cancion 9", Id = "138863509657081" },
+        { Name = "Cancion 10", Id = "115440201770223" },
+        { Name = "Cancion 11", Id = "128048502331483" },
+        { Name = "Cancion 12", Id = "135321902579514" },
+        { Name = "Cancion 13", Id = "131465489873214" },
+        { Name = "Cancion 14", Id = "6537242620" },
+    }
+
+    local CurrentIndex = 1
+    local ShuffleOn = false
+    local musicUserStarted = false
+    local NowPlayingParagraph
+
+    local function OptionLabel(song)
+        return song.Name .. " (" .. song.Id .. ")"
+    end
+
+    local function UpdateNowPlaying()
+        local song = SongList[CurrentIndex]
+        if not NowPlayingParagraph or not song then return end
+        if not musicUserStarted or MusicPlayer.SoundId == "" then
+            pcall(function()
+                if NowPlayingParagraph.SetTitle then NowPlayingParagraph:SetTitle("Sin cancion seleccionada") end
+                if NowPlayingParagraph.SetDesc then NowPlayingParagraph:SetDesc("Presiona Play o Siguiente para escuchar") end
+            end)
+            return
+        end
+        local estado = MusicPlayer.Playing and "Reproduciendo" or "Pausado"
+        pcall(function()
+            if NowPlayingParagraph.SetTitle then NowPlayingParagraph:SetTitle(song.Name) end
+            if NowPlayingParagraph.SetDesc then
+                NowPlayingParagraph:SetDesc(("%s • ID: %s • %s"):format(song.Name, song.Id, estado))
+            end
+        end)
+    end
+
+    local function SelectSong(index)
+        if not SongList[index] then return end
+        CurrentIndex = index
+        musicUserStarted = false
+        pcall(function() MusicPlayer:Stop() end)
+        MusicPlayer.SoundId = ""
+        UpdateNowPlaying()
+    end
+
+    local function PlaySong()
+        local song = SongList[CurrentIndex]
+        if not song then return end
+        musicUserStarted = true
+        if MusicPlayer.SoundId == "" or not string.find(tostring(MusicPlayer.SoundId), song.Id, 1, true) then
+            MusicPlayer.SoundId = "rbxassetid://" .. song.Id
+            pcall(function() MusicPlayer:Play() end)
+        elseif not MusicPlayer.Playing then
+            pcall(function() MusicPlayer:Resume() end)
+            if not MusicPlayer.Playing then pcall(function() MusicPlayer:Play() end) end
+        end
+        UpdateNowPlaying()
+    end
+
+    local function PauseSong()
+        if MusicPlayer.Playing then pcall(function() MusicPlayer:Pause() end) end
+        UpdateNowPlaying()
+    end
+
+    local function StopSong()
+        pcall(function() MusicPlayer:Stop() end)
+        MusicPlayer.SoundId = ""
+        musicUserStarted = false
+        UpdateNowPlaying()
+    end
+
+    local function NextSong()
+        local nextIndex = ShuffleOn and math.random(1, #SongList) or (CurrentIndex % #SongList) + 1
+        CurrentIndex = nextIndex
+        musicUserStarted = true
+        MusicPlayer.SoundId = "rbxassetid://" .. SongList[CurrentIndex].Id
+        pcall(function() MusicPlayer:Play() end)
+        UpdateNowPlaying()
+    end
+
+    local function PrevSong()
+        local prevIndex = ShuffleOn and math.random(1, #SongList) or (CurrentIndex - 2) % #SongList + 1
+        CurrentIndex = prevIndex
+        musicUserStarted = true
+        MusicPlayer.SoundId = "rbxassetid://" .. SongList[CurrentIndex].Id
+        pcall(function() MusicPlayer:Play() end)
+        UpdateNowPlaying()
+    end
+
+    MusicPlayer.Ended:Connect(function()
+        if musicUserStarted and not MusicPlayer.Looped then NextSong() end
+    end)
+
+    musicTab:Section({ Title = "Ahora suena", Icon = "music" })
+    NowPlayingParagraph = musicTab:Paragraph({
+        Title = "Sin cancion seleccionada",
+        Desc = "Presiona Play o Siguiente para escuchar",
+        Icon = "music",
+    })
+    UpdateNowPlaying()
+
+    musicTab:Section({ Title = "Controles", Icon = "settings" })
+    musicTab:Button({ Title = "Anterior", Desc = "Cancion previa", Callback = function() PrevSong() end })
+    musicTab:Button({ Title = "Siguiente", Desc = "Siguiente cancion", Callback = function() NextSong() end })
+    musicTab:Button({ Title = "Play", Desc = "Reproducir o reanudar", Callback = function() PlaySong() end })
+    musicTab:Button({ Title = "Pausa", Desc = "Pausar", Callback = function() PauseSong() end })
+    musicTab:Button({ Title = "Stop", Desc = "Detener", Callback = function() StopSong() end })
+
+    musicTab:Section({ Title = "Seleccionar musica", Icon = "list" })
+    local SongDropdown
+    SongDropdown = musicTab:Dropdown({
+        Title = "Cancion",
+        Desc = "Elige cancion (NO reproduce hasta Play/Siguiente)",
+        Values = (function()
+            local options = {}
+            for _, song in ipairs(SongList) do table.insert(options, OptionLabel(song)) end
+            return options
+        end)(),
+        Value = OptionLabel(SongList[1]),
+        Callback = function(selected)
+            for i, song in ipairs(SongList) do
+                if selected == OptionLabel(song) then SelectSong(i) break end
+            end
+        end,
+    })
+
+    musicTab:Section({ Title = "Preferencias", Icon = "settings" })
+    musicTab:Toggle({
+        Title = "Aleatorio",
+        Desc = "Elige cancion al azar al avanzar",
+        Value = false,
+        Callback = function(state) ShuffleOn = state end,
+    })
+    musicTab:Toggle({
+        Title = "Repetir",
+        Desc = "Repite la misma cancion al terminar",
+        Value = false,
+        Callback = function(state) MusicPlayer.Looped = state end,
+    })
+    musicTab:Slider({
+        Title = "Volumen",
+        Desc = "Volumen de reproduccion",
+        Value = { Min = 0, Max = 100, Default = 50 },
+        Step = 1,
+        Callback = function(value) MusicPlayer.Volume = value / 100 end,
+    })
+
+    musicTab:Section({ Title = "Agregar por ID", Icon = "plus" })
+    local NewName, NewId = "", ""
+    musicTab:Input({
+        Title = "Nombre",
+        Placeholder = "Ej: Mi cancion",
+        Callback = function(value) NewName = value end,
+    })
+    musicTab:Input({
+        Title = "ID Roblox",
+        Placeholder = "Ej: 1234567890",
+        Callback = function(value) NewId = tostring(value or ""):gsub("%D", "") end,
+    })
+    musicTab:Button({
+        Title = "Agregar cancion",
+        Desc = "Guarda nombre e ID en la lista",
+        Callback = function()
+            if NewName ~= "" and NewId ~= "" then
+                for _, song in ipairs(SongList) do
+                    if song.Id == NewId then return end
+                end
+                table.insert(SongList, { Name = NewName, Id = NewId })
+                local options = {}
+                for _, song in ipairs(SongList) do table.insert(options, OptionLabel(song)) end
+                pcall(function() if SongDropdown and SongDropdown.Refresh then SongDropdown:Refresh(options) end end)
+                sendNotification("Music", "Agregada: " .. NewName, 2)
+            end
+        end,
+    })
+end)()
 
 -- ==========================================
 -- AUTO CONFIG SAVE/LOAD (MM2)
@@ -7243,7 +7351,7 @@ end)
 pcall(function()
     local cm = Window and Window.ConfigManager
     if not cm then return end
-    local cfgName = "VortexAuto"
+    local cfgName = "FlexusAuto"
     local cfg
     pcall(function()
         if cm.CreateConfig then
@@ -7274,31 +7382,4 @@ pcall(function()
 end)
 
 
--- Redirect WindUI notifications -> VortexNotify
-pcall(function()
-    if WindUI and type(WindUI) == "table" then
-        WindUI.Notify = function(_, opts)
-            opts = opts or {}
-            vortexNotify(opts.Title or opts.title, opts.Content or opts.content or opts.Text, opts.Duration or opts.duration)
-        end
-    end
-end)
-
-
--- Force all notifications through VortexNotify (no WindUI notify UI)
-pcall(function()
-    local function hookNotify(tbl)
-        if type(tbl) ~= "table" then return end
-        tbl.Notify = function(_, opts)
-            opts = type(opts) == "table" and opts or { Content = tostring(opts) }
-            local title = opts.Title or opts.title or "Vortex X Sage"
-            local content = opts.Content or opts.content or opts.Text or opts.text or ""
-            local dur = opts.Duration or opts.duration or 2.5
-            if VortexNotify and VortexNotify.Show then
-                VortexNotify.Show(tostring(title), tostring(content), tonumber(dur) or 2.5)
-            end
-        end
-    end
-    if WindUI then hookNotify(WindUI) end
-    if Window then hookNotify(Window) end
-end)
+print("[FlexusHub] MM2 loaded")
