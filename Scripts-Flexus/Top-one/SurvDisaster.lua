@@ -1,5 +1,6 @@
 -- ==========================================
--- VORTEX X SAGE - SURVIVAL DISASTER [WindUI]
+-- FLEXUSHUB [SURVIVAL DISASTER] - WindUI
+-- MULTI-EXECUTOR (PC, Delta, Hydrogen, CodeX, etc.)
 -- ==========================================
 
 if _G.EmoteFling_GlobalCleanup then
@@ -16,187 +17,25 @@ local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ==========================================
--- VORTEX NOTIFY (pequeña, dorada, transparente)
--- Solo 1 visible: la nueva reemplaza a la anterior
+-- NOTIFY (WindUI)
 -- ==========================================
-local VortexNotify = {}
-do
-	local TweenService = game:GetService("TweenService")
-	local CoreGui = game:GetService("CoreGui")
-	local currentFrame = nil
-	local currentToken = 0
-	local WIDTH, HEIGHT = 260, 58
-
-	local function getHost()
-		local host
-		pcall(function()
-			if gethui then host = gethui() end
-		end)
-		if not host then
-			host = CoreGui
-		end
-		local gui = host:FindFirstChild("VortexNotifyHost")
-		if not gui then
-			gui = Instance.new("ScreenGui")
-			gui.Name = "VortexNotifyHost"
-			gui.ResetOnSpawn = false
-			gui.IgnoreGuiInset = true
-			gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-			pcall(function()
-				if syn and syn.protect_gui then syn.protect_gui(gui) end
-			end)
-			gui.Parent = host
-		end
-		return gui
-	end
-
-	local function dismiss(frame, instant)
-		if not frame then return end
-		pcall(function()
-			if instant then
-				frame:Destroy()
-				return
-			end
-			local tw = TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-				Position = UDim2.new(1, 40, 0, 16),
-				BackgroundTransparency = 1,
-			})
-			tw:Play()
-			task.delay(0.28, function()
-				pcall(function() frame:Destroy() end)
-			end)
-		end)
-	end
-
-	function VortexNotify.Show(title, text, duration)
-		duration = tonumber(duration) or 2.5
-		title = tostring(title or "Vortex X Sage")
-		text = tostring(text or "")
-
-		-- Quitar la anterior al instante
-		if currentFrame then
-			local old = currentFrame
-			currentFrame = nil
-			dismiss(old, true)
-		end
-
-		currentToken = currentToken + 1
-		local token = currentToken
-
-		local gui = getHost()
-		local frame = Instance.new("Frame")
-		frame.Name = "VN"
-		frame.AnchorPoint = Vector2.new(1, 0)
-		frame.Size = UDim2.fromOffset(WIDTH, HEIGHT)
-		frame.Position = UDim2.new(1, 20, 0, 16)
-		frame.BackgroundColor3 = Color3.fromRGB(18, 14, 8)
-		frame.BackgroundTransparency = 0.35
-		frame.BorderSizePixel = 0
-		frame.Parent = gui
-		currentFrame = frame
-
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 10)
-		corner.Parent = frame
-
-		local stroke = Instance.new("UIStroke")
-		stroke.Color = Color3.fromRGB(255, 200, 55)
-		stroke.Thickness = 1.2
-		stroke.Transparency = 0.35
-		stroke.Parent = frame
-
-		local accent = Instance.new("Frame")
-		accent.Size = UDim2.new(0, 3, 1, -12)
-		accent.Position = UDim2.new(0, 6, 0, 6)
-		accent.BackgroundColor3 = Color3.fromRGB(255, 195, 45)
-		accent.BackgroundTransparency = 0.15
-		accent.BorderSizePixel = 0
-		accent.Parent = frame
-		Instance.new("UICorner", accent).CornerRadius = UDim.new(1, 0)
-
-		local titleL = Instance.new("TextLabel")
-		titleL.BackgroundTransparency = 1
-		titleL.Position = UDim2.new(0, 14, 0, 6)
-		titleL.Size = UDim2.new(1, -22, 0, 18)
-		titleL.Font = Enum.Font.GothamBold
-		titleL.TextSize = 13
-		titleL.TextXAlignment = Enum.TextXAlignment.Left
-		titleL.TextColor3 = Color3.fromRGB(255, 220, 90)
-		titleL.Text = title
-		titleL.Parent = frame
-
-		local bodyL = Instance.new("TextLabel")
-		bodyL.BackgroundTransparency = 1
-		bodyL.Position = UDim2.new(0, 14, 0, 26)
-		bodyL.Size = UDim2.new(1, -22, 0, 28)
-		bodyL.Font = Enum.Font.Gotham
-		bodyL.TextSize = 12
-		bodyL.TextXAlignment = Enum.TextXAlignment.Left
-		bodyL.TextYAlignment = Enum.TextYAlignment.Top
-		bodyL.TextWrapped = true
-		bodyL.TextColor3 = Color3.fromRGB(230, 220, 190)
-		bodyL.TextTransparency = 0.1
-		bodyL.Text = text
-		bodyL.Parent = frame
-
-		TweenService:Create(frame, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-			Position = UDim2.new(1, -16, 0, 16)
-		}):Play()
-
-		task.delay(duration, function()
-			if token ~= currentToken then return end
-			if currentFrame ~= frame then return end
-			currentFrame = nil
-			local tw = TweenService:Create(frame, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
-				Position = UDim2.new(1, 40, 0, 16),
-				BackgroundTransparency = 1
-			})
-			tw:Play()
-			pcall(function()
-				titleL.TextTransparency = 1
-				bodyL.TextTransparency = 1
-				stroke.Transparency = 1
-				accent.BackgroundTransparency = 1
-			end)
-			tw.Completed:Wait()
-			pcall(function() frame:Destroy() end)
-		end)
-	end
-end
-
-local function VXSNotify(title, content, duration)
-	pcall(function()
-		if VortexNotify and VortexNotify.Show then
-			VortexNotify.Show(tostring(title or "Vortex X Sage"), tostring(content or ""), tonumber(duration) or 2.5)
-		end
-	end)
-end
-
--- Redirigir WindUI Notify -> VortexNotify
-pcall(function()
-    if WindUI and type(WindUI.Notify) == "function" then
-        local _old = WindUI.Notify
-        WindUI.Notify = function(self, opts)
-            opts = opts or {}
-            if type(self) == "table" and not opts.Title and self.Title then
-                opts = self
-                self = WindUI
-            end
-            pcall(function()
-                if VortexNotify and VortexNotify.Show then
-                    VortexNotify.Show(tostring(opts.Title or "Vortex X Sage"), tostring(opts.Content or opts.Text or ""), tonumber(opts.Duration) or 2.5)
-                end
-            end)
-            -- no llamar old para evitar doble notificacion
+local function sendNotify(title, content, duration)
+    pcall(function()
+        if WindUI and type(WindUI.Notify) == "function" then
+            WindUI:Notify({
+                Title = tostring(title or "FlexusHub"),
+                Content = tostring(content or ""),
+                Duration = tonumber(duration) or 2.5,
+            })
         end
-    end
-end)
-
-
-
+    end)
+end
+local VXSNotify = sendNotify
 
 local ModuleState = _G.ModuleState or { EmoteFlingActive = false, TurboFlingActive = false }
 _G.ModuleState = ModuleState
+local SharedOpts = _G.FlexusHub_SD_Opts or {}
+_G.FlexusHub_SD_Opts = SharedOpts
 
 local EmoteFlingConfig = {
     Armed = true,
@@ -240,7 +79,7 @@ local PresetAnimations = {
     ["Push2"] = "82070755455634",
 }
 local PresetNames = { "Dropkick", "Dropkicking [TRENDY]", "Tenna Kick", "MMA Kick", "Slap", "Slap2", "Push", "Push2" }
-local CONFIG_FILE = "VortexXSage_EmoteFling.json"
+local CONFIG_FILE = "FlexusHub_SurvivalDisaster.json"
 
 local EventConnections = {}
 local function RegisterConnection(name, conn)
@@ -260,9 +99,9 @@ end
 local WindUI
 do
     local urls = {
-        "https://github.com/MrSxxo/WindUI/releases/latest/download/main.lua",
-        "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
+        "https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/FlexusHub/Flexus-Lib/Flexus-Team/WindUi-FlexusHub.lua",
         "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua",
+        "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
     }
     for _, url in ipairs(urls) do
         local ok, res = pcall(function() return loadstring(game:HttpGet(url))() end)
@@ -270,24 +109,25 @@ do
     end
 end
 if not WindUI then
-    warn("[Vortex] WindUI load failed")
+    warn("[FlexusHub] WindUI load failed")
     return
 end
 
 local function Notify(data)
     if not EmoteFlingConfig.NotificationsEnabled then return end
+    data = data or {}
+    local title = data.Title or "FlexusHub"
+    local content = data.Content or data.Text or ""
+    local dur = data.Duration or 2.5
     pcall(function()
-        VXSNotify("Vortex X Sage", "", 2.5)
+        if WindUI and type(WindUI.Notify) == "function" then
+            WindUI:Notify({ Title = tostring(title), Content = tostring(content), Duration = tonumber(dur) or 2.5 })
+        end
     end)
 end
 
 local function showBottomMessage(msg)
-    pcall(function()
-        if VortexNotify and VortexNotify.Show then
-            VortexNotify.Show("Vortex X Sage", tostring(msg or ""), 2.2)
-        end
-    end)
-    Notify({ Title = "Vortex X Sage", Content = tostring(msg), Duration = 2 })
+    Notify({ Title = "FlexusHub", Content = tostring(msg or ""), Duration = 2.2 })
 end
 
 local function SaveConfig()
@@ -531,17 +371,17 @@ end
 
 
 local function setFlyBubbleVisual(on)
-	pcall(function()
-		local ic = flyBubbleFab and flyBubbleFab:FindFirstChild("Icon")
-		local st = flyBubbleFab and flyBubbleFab:FindFirstChild("Stroke")
-		if on then
-			if ic then ic.ImageColor3 = Color3.fromRGB(120, 200, 255) end
-			if st then st.Color = Color3.fromRGB(120, 200, 255); st.Transparency = 0.15 end
-		else
-			if ic then ic.ImageColor3 = Color3.fromRGB(255, 200, 55) end
-			if st then st.Color = Color3.fromRGB(255, 200, 55); st.Transparency = 0.45 end
-		end
-	end)
+        pcall(function()
+                local ic = flyBubbleFab and flyBubbleFab:FindFirstChild("Icon")
+                local st = flyBubbleFab and flyBubbleFab:FindFirstChild("Stroke")
+                if on then
+                        if ic then ic.ImageColor3 = Color3.fromRGB(120, 200, 255) end
+                        if st then st.Color = Color3.fromRGB(120, 200, 255); st.Transparency = 0.15 end
+                else
+                        if ic then ic.ImageColor3 = Color3.fromRGB(200, 200, 210) end
+                        if st then st.Color = Color3.fromRGB(200, 200, 210); st.Transparency = 0.45 end
+                end
+        end)
 end
 
 local flyAnimTrack = nil
@@ -549,334 +389,401 @@ local flyControls = nil
 local flySmoothVel = Vector3.zero
 
 local function getFlyControls()
-	if flyControls then return flyControls end
-	pcall(function()
-		local ps = LocalPlayer:FindFirstChild("PlayerScripts")
-		local pm = ps and ps:FindFirstChild("PlayerModule")
-		if pm then
-			flyControls = require(pm):GetControls()
-		end
-	end)
-	return flyControls
+        if flyControls then return flyControls end
+        pcall(function()
+                local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+                local pm = ps and ps:FindFirstChild("PlayerModule")
+                if pm then
+                        flyControls = require(pm):GetControls()
+                end
+        end)
+        return flyControls
 end
 
 -- Input unificado PC + Movil (joystick) relativo a camara
 local function getFlyMoveDir(cam, hum)
-	local move = Vector3.zero
-	local ctrl = getFlyControls()
-	if ctrl then
-		pcall(function()
-			local mv = ctrl:GetMoveVector()
-			if mv and mv.Magnitude > 0.05 then
-				-- GetMoveVector suele ser relativo a camara (X=right, Z=forward)
-				local look = cam.CFrame.LookVector
-				local right = cam.CFrame.RightVector
-				move = right * mv.X + look * -mv.Z
-				-- vertical con pitch de camara al avanzar
-				if math.abs(mv.Z) > 0.1 then
-					move = move + Vector3.yAxis * (look.Y * -mv.Z * 0.9)
-				end
-			end
-		end)
-	end
+        local move = Vector3.zero
+        local ctrl = getFlyControls()
+        if ctrl then
+                pcall(function()
+                        local mv = ctrl:GetMoveVector()
+                        if mv and mv.Magnitude > 0.05 then
+                                -- GetMoveVector suele ser relativo a camara (X=right, Z=forward)
+                                local look = cam.CFrame.LookVector
+                                local right = cam.CFrame.RightVector
+                                move = right * mv.X + look * -mv.Z
+                                -- vertical con pitch de camara al avanzar
+                                if math.abs(mv.Z) > 0.1 then
+                                        move = move + Vector3.yAxis * (look.Y * -mv.Z * 0.9)
+                                end
+                        end
+                end)
+        end
 
-	-- PC teclado (siempre suma, por si el modulo no captura)
-	if not UserInputService:GetFocusedTextBox() then
-		local look = cam.CFrame.LookVector
-		local right = cam.CFrame.RightVector
-		local k = Vector3.zero
-		if UserInputService:IsKeyDown(Enum.KeyCode.W) then k = k + look end
-		if UserInputService:IsKeyDown(Enum.KeyCode.S) then k = k - look end
-		if UserInputService:IsKeyDown(Enum.KeyCode.A) then k = k - right end
-		if UserInputService:IsKeyDown(Enum.KeyCode.D) then k = k + right end
-		if UserInputService:IsKeyDown(Enum.KeyCode.Space) then k = k + Vector3.yAxis end
-		if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-			k = k - Vector3.yAxis
-		end
-		if k.Magnitude > 0.05 then
-			move = move + k
-		end
-	end
+        -- PC teclado (siempre suma, por si el modulo no captura)
+        if not UserInputService:GetFocusedTextBox() then
+                local look = cam.CFrame.LookVector
+                local right = cam.CFrame.RightVector
+                local k = Vector3.zero
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then k = k + look end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then k = k - look end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then k = k - right end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then k = k + right end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then k = k + Vector3.yAxis end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                        k = k - Vector3.yAxis
+                end
+                if k.Magnitude > 0.05 then
+                        move = move + k
+                end
+        end
 
-	-- Mobile / stick: siempre sumar MoveDirection + pitch de camara
-	if hum and hum.MoveDirection.Magnitude > 0.05 then
-		local md = hum.MoveDirection
-		local lookY = cam.CFrame.LookVector.Y
-		move = move + Vector3.new(md.X, lookY * md.Magnitude, md.Z)
-	end
-	-- Legacy flat fallback kept for older paths
-	if false and move.Magnitude < 0.08 and hum and hum.MoveDirection.Magnitude > 0.05 then
-		local md = hum.MoveDirection
-		local flatLook = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)
-		if flatLook.Magnitude > 0.05 then
-			flatLook = flatLook.Unit
-			local right = Vector3.new(-flatLook.Z, 0, flatLook.X)
-			-- md ya viene en mundo; usarlo directo + pitch de camara
-			move = md + Vector3.yAxis * (cam.CFrame.LookVector.Y * md.Magnitude * 0.75)
-		else
-			move = md
-		end
-	end
+        -- Mobile / stick: siempre sumar MoveDirection + pitch de camara
+        if hum and hum.MoveDirection.Magnitude > 0.05 then
+                local md = hum.MoveDirection
+                local lookY = cam.CFrame.LookVector.Y
+                move = move + Vector3.new(md.X, lookY * md.Magnitude, md.Z)
+        end
+        -- Legacy flat fallback kept for older paths
+        if false and move.Magnitude < 0.08 and hum and hum.MoveDirection.Magnitude > 0.05 then
+                local md = hum.MoveDirection
+                local flatLook = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)
+                if flatLook.Magnitude > 0.05 then
+                        flatLook = flatLook.Unit
+                        local right = Vector3.new(-flatLook.Z, 0, flatLook.X)
+                        -- md ya viene en mundo; usarlo directo + pitch de camara
+                        move = md + Vector3.yAxis * (cam.CFrame.LookVector.Y * md.Magnitude * 0.75)
+                else
+                        move = md
+                end
+        end
 
-	if move.Magnitude > 1 then
-		move = move.Unit
-	end
-	return move
+        if move.Magnitude > 1 then
+                move = move.Unit
+        end
+        return move
 end
 
 local function stopFlyAnim()
-	if flyAnimTrack then
-		pcall(function() flyAnimTrack:Stop(0.2) end)
-		flyAnimTrack = nil
-	end
+        if flyAnimTrack then
+                pcall(function() flyAnimTrack:Stop(0.2) end)
+                flyAnimTrack = nil
+        end
 end
 
 local function playFlyAnim(hum)
-	stopFlyAnim()
-	if not hum then return end
-	-- Pose de vuelo / freefall (animacion base Roblox, se ve menos "palo")
-	local ids = {
-		"rbxassetid://616006778", -- levitation idle-ish
-		"rbxassetid://10921293373", -- fall
-		"rbxassetid://507767968", -- fall classic
-	}
-	for _, id in ipairs(ids) do
-		local ok, track = pcall(function()
-			local a = Instance.new("Animation")
-			a.AnimationId = id
-			return hum:LoadAnimation(a)
-		end)
-		if ok and track then
-			pcall(function()
-				track.Priority = Enum.AnimationPriority.Action
-				track.Looped = true
-				track:Play(0.25)
-				track:AdjustSpeed(0.35)
-			end)
-			flyAnimTrack = track
-			return
-		end
-	end
+        stopFlyAnim()
+        if not hum then return end
+        -- Pose de vuelo / freefall (animacion base Roblox, se ve menos "palo")
+        local ids = {
+                "rbxassetid://616006778", -- levitation idle-ish
+                "rbxassetid://10921293373", -- fall
+                "rbxassetid://507767968", -- fall classic
+        }
+        for _, id in ipairs(ids) do
+                local ok, track = pcall(function()
+                        local a = Instance.new("Animation")
+                        a.AnimationId = id
+                        return hum:LoadAnimation(a)
+                end)
+                if ok and track then
+                        pcall(function()
+                                track.Priority = Enum.AnimationPriority.Action
+                                track.Looped = true
+                                track:Play(0.25)
+                                track:AdjustSpeed(0.35)
+                        end)
+                        flyAnimTrack = track
+                        return
+                end
+        end
 end
 
 local function stopFlyMovers()
-	if flyConn then pcall(function() flyConn:Disconnect() end) flyConn = nil end
-	if flyBV then pcall(function() flyBV:Destroy() end) flyBV = nil end
-	if flyBG then pcall(function() flyBG:Destroy() end) flyBG = nil end
-	stopFlyAnim()
-	flySmoothVel = Vector3.zero
-	local char = LocalPlayer.Character
-	local hum = char and char:FindFirstChildOfClass("Humanoid")
-	if hum then
-		pcall(function()
-			hum.PlatformStand = false
-			hum.AutoRotate = true
-			hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-		end)
-	end
+        if flyConn then pcall(function() flyConn:Disconnect() end) flyConn = nil end
+        if flyBV then pcall(function() flyBV:Destroy() end) flyBV = nil end
+        if flyBG then pcall(function() flyBG:Destroy() end) flyBG = nil end
+        stopFlyAnim()
+        flySmoothVel = Vector3.zero
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+                pcall(function()
+                        hum.PlatformStand = false
+                        hum.AutoRotate = true
+                        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end)
+        end
 end
 
 local function startFlyMovers()
-	stopFlyMovers()
-	local char = LocalPlayer.Character
-	local hrp = char and char:FindFirstChild("HumanoidRootPart")
-	local hum = char and char:FindFirstChildOfClass("Humanoid")
-	if not hrp then return false end
+        stopFlyMovers()
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if not hrp then return false end
 
-	-- NO PlatformStand: el cuerpo puede animar (no queda como palo)
-	if hum then
-		pcall(function()
-			hum.PlatformStand = false
-			hum.AutoRotate = false
-			hum:ChangeState(Enum.HumanoidStateType.Freefall)
-		end)
-		playFlyAnim(hum)
-	end
+        -- NO PlatformStand: el cuerpo puede animar (no queda como palo)
+        if hum then
+                pcall(function()
+                        hum.PlatformStand = false
+                        hum.AutoRotate = false
+                        hum:ChangeState(Enum.HumanoidStateType.Freefall)
+                end)
+                playFlyAnim(hum)
+        end
 
-	local bv = Instance.new("BodyVelocity")
-	bv.Name = "VXFlyVel"
-	bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-	bv.P = 1250
-	bv.Velocity = Vector3.zero
-	bv.Parent = hrp
-	flyBV = bv
+        local bv = Instance.new("BodyVelocity")
+        bv.Name = "VXFlyVel"
+        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bv.P = 1250
+        bv.Velocity = Vector3.zero
+        bv.Parent = hrp
+        flyBV = bv
 
-	-- Gyro suave para inclinacion Superman sin congelar del todo
-	local bg = Instance.new("BodyGyro")
-	bg.Name = "VXFlyGyro"
-	bg.MaxTorque = Vector3.new(4e5, 4e5, 4e5)
-	bg.P = 8e3
-	bg.D = 800
-	bg.CFrame = hrp.CFrame
-	bg.Parent = hrp
-	flyBG = bg
+        -- Gyro suave para inclinacion Superman sin congelar del todo
+        local bg = Instance.new("BodyGyro")
+        bg.Name = "VXFlyGyro"
+        bg.MaxTorque = Vector3.new(4e5, 4e5, 4e5)
+        bg.P = 8e3
+        bg.D = 800
+        bg.CFrame = hrp.CFrame
+        bg.Parent = hrp
+        flyBG = bg
 
-	flySmoothVel = Vector3.zero
-	return true
+        flySmoothVel = Vector3.zero
+        return true
 end
 
 local function toggleFly()
-	flyEnabled = not flyEnabled
-	if flyEnabled then
-		if not startFlyMovers() then
-			flyEnabled = false
-			setFlyBubbleVisual(false)
-			Notify({ Title = "Fly", Content = "Sin personaje.", Duration = 2, Icon = "alert-circle" })
-			return
-		end
-		setFlyBubbleVisual(true)
-		Notify({ Title = "Fly", Content = "Superman Fly ON (PC + Movil)", Duration = 2, Icon = "plane" })
+        flyEnabled = not flyEnabled
+        if flyEnabled then
+                if not startFlyMovers() then
+                        flyEnabled = false
+                        setFlyBubbleVisual(false)
+                        Notify({ Title = "Fly", Content = "Sin personaje.", Duration = 2, Icon = "alert-circle" })
+                        return
+                end
+                setFlyBubbleVisual(true)
+                Notify({ Title = "Fly", Content = "Superman Fly ON (PC + Movil)", Duration = 2, Icon = "plane" })
 
-		if flyConn then pcall(function() flyConn:Disconnect() end) end
-		flyConn = RunService.RenderStepped:Connect(function(dt)
-			if not flyEnabled then return end
-			dt = math.clamp(dt or 0.016, 0.001, 0.05)
-			local char = LocalPlayer.Character
-			local hrp = char and char:FindFirstChild("HumanoidRootPart")
-			local hum = char and char:FindFirstChildOfClass("Humanoid")
-			local cam = workspace.CurrentCamera
-			if not hrp or not cam then return end
+                if flyConn then pcall(function() flyConn:Disconnect() end) end
+                flyConn = RunService.RenderStepped:Connect(function(dt)
+                        if not flyEnabled then return end
+                        dt = math.clamp(dt or 0.016, 0.001, 0.05)
+                        local char = LocalPlayer.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        local hum = char and char:FindFirstChildOfClass("Humanoid")
+                        local cam = workspace.CurrentCamera
+                        if not hrp or not cam then return end
 
-			if not flyBV or flyBV.Parent ~= hrp or not flyBG or flyBG.Parent ~= hrp then
-				startFlyMovers()
-				if not flyBV then return end
-			end
+                        if not flyBV or flyBV.Parent ~= hrp or not flyBG or flyBG.Parent ~= hrp then
+                                startFlyMovers()
+                                if not flyBV then return end
+                        end
 
-			if hum then
-				pcall(function()
-					hum.PlatformStand = false
-					hum.AutoRotate = false
-				end)
-				-- mantener animacion de vuelo
-				if not flyAnimTrack or not flyAnimTrack.IsPlaying then
-					playFlyAnim(hum)
-				end
-			end
+                        if hum then
+                                pcall(function()
+                                        hum.PlatformStand = false
+                                        hum.AutoRotate = false
+                                end)
+                                -- mantener animacion de vuelo
+                                if not flyAnimTrack or not flyAnimTrack.IsPlaying then
+                                        playFlyAnim(hum)
+                                end
+                        end
 
-			local dir = getFlyMoveDir(cam, hum)
-			local targetVel
-			if dir.Magnitude > 0.08 then
-				targetVel = dir.Unit * flySpeed
-			else
-				-- hover suave (Invincible)
-				targetVel = Vector3.new(0, 1.2, 0)
-			end
+                        local dir = getFlyMoveDir(cam, hum)
+                        local targetVel
+                        if dir.Magnitude > 0.08 then
+                                targetVel = dir.Unit * flySpeed
+                        else
+                                -- hover suave (Invincible)
+                                targetVel = Vector3.new(0, 1.2, 0)
+                        end
 
-			-- aceleracion suave (no teletransporta)
-			local accel = 12
-			flySmoothVel = flySmoothVel:Lerp(targetVel, math.clamp(accel * dt, 0, 1))
-			flyBV.Velocity = flySmoothVel
+                        -- aceleracion suave (no teletransporta)
+                        local accel = 12
+                        flySmoothVel = flySmoothVel:Lerp(targetVel, math.clamp(accel * dt, 0, 1))
+                        flyBV.Velocity = flySmoothVel
 
-			-- Orientacion: hacia donde vuelas + lean Superman
-			local lookDir
-			if flySmoothVel.Magnitude > 4 then
-				lookDir = flySmoothVel.Unit
-			else
-				lookDir = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)
-				if lookDir.Magnitude < 0.05 then
-					lookDir = hrp.CFrame.LookVector
-				end
-				lookDir = lookDir.Unit
-			end
+                        -- Orientacion: hacia donde vuelas + lean Superman
+                        local lookDir
+                        if flySmoothVel.Magnitude > 4 then
+                                lookDir = flySmoothVel.Unit
+                        else
+                                lookDir = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)
+                                if lookDir.Magnitude < 0.05 then
+                                        lookDir = hrp.CFrame.LookVector
+                                end
+                                lookDir = lookDir.Unit
+                        end
 
-			local up = Vector3.yAxis
-			if math.abs(lookDir:Dot(up)) > 0.92 then
-				up = cam.CFrame.RightVector
-			end
-			local cf = CFrame.lookAt(hrp.Position, hrp.Position + lookDir, up)
-			-- inclinacion hacia adelante al acelerar
-			local lean = math.clamp(flySmoothVel.Magnitude / math.max(flySpeed, 1), 0, 1)
-			cf = cf * CFrame.Angles(math.rad(-18 * lean), 0, 0)
-			-- roll suave al strafear
-			local side = flySmoothVel:Dot(cam.CFrame.RightVector)
-			local roll = math.clamp(side / math.max(flySpeed, 1), -1, 1)
-			cf = cf * CFrame.Angles(0, 0, math.rad(-20 * roll))
+                        local up = Vector3.yAxis
+                        if math.abs(lookDir:Dot(up)) > 0.92 then
+                                up = cam.CFrame.RightVector
+                        end
+                        local cf = CFrame.lookAt(hrp.Position, hrp.Position + lookDir, up)
+                        -- inclinacion hacia adelante al acelerar
+                        local lean = math.clamp(flySmoothVel.Magnitude / math.max(flySpeed, 1), 0, 1)
+                        cf = cf * CFrame.Angles(math.rad(-18 * lean), 0, 0)
+                        -- roll suave al strafear
+                        local side = flySmoothVel:Dot(cam.CFrame.RightVector)
+                        local roll = math.clamp(side / math.max(flySpeed, 1), -1, 1)
+                        cf = cf * CFrame.Angles(0, 0, math.rad(-20 * roll))
 
-			flyBG.CFrame = flyBG.CFrame:Lerp(cf, math.clamp(8 * dt, 0, 1))
-		end)
-	else
-		stopFlyMovers()
-		setFlyBubbleVisual(false)
-		Notify({ Title = "Fly", Content = "Fly OFF", Duration = 2, Icon = "plane" })
-	end
+                        flyBG.CFrame = flyBG.CFrame:Lerp(cf, math.clamp(8 * dt, 0, 1))
+                end)
+        else
+                stopFlyMovers()
+                setFlyBubbleVisual(false)
+                Notify({ Title = "Fly", Content = "Fly OFF", Duration = 2, Icon = "plane" })
+        end
 end
 
 
--- Theme
-VXSNotify("Login VortexHub", "Login VortexHub", 2)
-task.wait(0.3)
+-- Theme (FlexusHub Graphite / Neon Blue / Golden)
+local function createTheme(name, colors)
+    local theme = { Name = name }
+    for key, value in pairs(WindUI:GetThemes().Dark) do
+        theme[key] = value
+    end
+    for key, value in pairs(colors) do
+        theme[key] = value
+    end
+    WindUI:AddTheme(theme)
+end
 
-WindUI:AddTheme({
-    Name = "VortexGoldSolid",
-    Accent = Color3.fromRGB(255, 195, 45),
-    Background = Color3.fromRGB(12, 12, 14),
-    BackgroundTransparency = 0,
-    Outline = Color3.fromRGB(255, 210, 70),
-    Text = Color3.fromRGB(255, 255, 255),
-    Placeholder = Color3.fromRGB(190, 190, 200),
-    Button = Color3.fromRGB(210, 160, 35),
-    Icon = Color3.fromRGB(255, 200, 60),
+createTheme("Graphite", {
+    Accent = Color3.fromRGB(200, 200, 210),
+    Outline = Color3.fromRGB(90, 90, 98),
+    Text = Color3.fromRGB(245, 245, 250),
+    Placeholder = Color3.fromRGB(150, 150, 160),
+    Button = Color3.fromRGB(70, 70, 78),
+    Background = Color3.fromRGB(8, 8, 10),
+    Icon = Color3.fromRGB(220, 220, 225),
     Hover = Color3.fromRGB(255, 255, 255),
-    WindowBackground = Color3.fromRGB(14, 14, 16),
-    WindowShadow = Color3.fromRGB(255, 185, 50),
-    DialogBackground = Color3.fromRGB(18, 18, 22),
-    DialogBackgroundTransparency = 0,
-    DialogTitle = Color3.fromRGB(255, 255, 255),
-    DialogContent = Color3.fromRGB(235, 235, 240),
-    DialogIcon = Color3.fromRGB(255, 200, 60),
-    WindowTopbarButtonIcon = Color3.fromRGB(255, 255, 255),
-    WindowTopbarTitle = Color3.fromRGB(255, 255, 255),
-    WindowTopbarAuthor = Color3.fromRGB(210, 210, 220),
-    WindowTopbarIcon = Color3.fromRGB(255, 200, 60),
-    TabBackground = Color3.fromRGB(20, 20, 24),
+    WindowBackground = Color3.fromRGB(10, 10, 12),
+    WindowShadow = Color3.fromRGB(0, 0, 0),
+    PanelBackground = Color3.fromRGB(16, 16, 18),
+    PanelBackgroundTransparency = 0.58,
+    TabBackground = Color3.fromRGB(28, 28, 32),
+    TabBackgroundHover = Color3.fromRGB(55, 55, 60),
+    TabBackgroundHoverTransparency = 0.7,
+    TabBackgroundActive = Color3.fromRGB(75, 75, 82),
+    TabBackgroundActiveTransparency = 0.48,
     TabTitle = Color3.fromRGB(255, 255, 255),
-    TabIcon = Color3.fromRGB(255, 205, 70),
-    ElementBackground = Color3.fromRGB(24, 24, 30),
-    ElementTitle = Color3.fromRGB(255, 255, 255),
-    ElementDesc = Color3.fromRGB(200, 200, 210),
-    ElementIcon = Color3.fromRGB(255, 205, 70),
-    PopupBackground = Color3.fromRGB(18, 18, 22),
-    PopupBackgroundTransparency = 0,
-    PopupTitle = Color3.fromRGB(255, 255, 255),
-    PopupContent = Color3.fromRGB(230, 230, 235),
-    PopupIcon = Color3.fromRGB(255, 205, 70),
-    Toggle = Color3.fromRGB(255, 195, 45),
-    ToggleBar = Color3.fromRGB(40, 40, 50),
-    Checkbox = Color3.fromRGB(40, 40, 50),
-    CheckboxIcon = Color3.fromRGB(255, 255, 255),
-    Slider = Color3.fromRGB(255, 195, 45),
-    SliderThumb = Color3.fromRGB(255, 255, 255),
+    TabIconTransparency = 0.1,
+    TabIconTransparencyActive = 0,
+    ElementBackground = Color3.fromRGB(22, 22, 26),
+    ElementTitle = Color3.fromRGB(245, 245, 250),
+    ElementDesc = Color3.fromRGB(170, 170, 180),
 })
-WindUI:SetTheme("VortexGoldSolid")
+
+createTheme("Neon Blue", {
+    Accent = Color3.fromRGB(60, 160, 255),
+    Outline = Color3.fromRGB(40, 100, 180),
+    Text = Color3.fromRGB(230, 240, 255),
+    Placeholder = Color3.fromRGB(120, 160, 210),
+    Button = Color3.fromRGB(30, 90, 170),
+    Background = Color3.fromRGB(4, 10, 22),
+    Icon = Color3.fromRGB(120, 190, 255),
+    Hover = Color3.fromRGB(180, 220, 255),
+    WindowBackground = Color3.fromRGB(6, 14, 28),
+    WindowShadow = Color3.fromRGB(0, 20, 50),
+    PanelBackground = Color3.fromRGB(8, 18, 36),
+    PanelBackgroundTransparency = 0.54,
+    TabBackground = Color3.fromRGB(12, 30, 55),
+    TabBackgroundHover = Color3.fromRGB(25, 70, 130),
+    TabBackgroundHoverTransparency = 0.68,
+    TabBackgroundActive = Color3.fromRGB(35, 100, 180),
+    TabBackgroundActiveTransparency = 0.45,
+    TabTitle = Color3.fromRGB(230, 245, 255),
+    TabIconTransparency = 0.1,
+    TabIconTransparencyActive = 0,
+    ElementBackground = Color3.fromRGB(10, 24, 48),
+    ElementTitle = Color3.fromRGB(230, 245, 255),
+    ElementDesc = Color3.fromRGB(140, 180, 230),
+})
+
+createTheme("Golden", {
+    Accent = Color3.fromRGB(255, 195, 55),
+    Outline = Color3.fromRGB(180, 130, 30),
+    Text = Color3.fromRGB(255, 245, 220),
+    Placeholder = Color3.fromRGB(190, 160, 100),
+    Button = Color3.fromRGB(160, 110, 25),
+    Background = Color3.fromRGB(14, 10, 4),
+    Icon = Color3.fromRGB(255, 210, 100),
+    Hover = Color3.fromRGB(255, 240, 180),
+    WindowBackground = Color3.fromRGB(18, 12, 6),
+    WindowShadow = Color3.fromRGB(40, 25, 0),
+    PanelBackground = Color3.fromRGB(28, 18, 8),
+    PanelBackgroundTransparency = 0.52,
+    TabBackground = Color3.fromRGB(45, 30, 12),
+    TabBackgroundHover = Color3.fromRGB(100, 70, 25),
+    TabBackgroundHoverTransparency = 0.66,
+    TabBackgroundActive = Color3.fromRGB(140, 95, 30),
+    TabBackgroundActiveTransparency = 0.44,
+    TabTitle = Color3.fromRGB(255, 240, 200),
+    TabIconTransparency = 0.08,
+    TabIconTransparencyActive = 0,
+    ElementBackground = Color3.fromRGB(32, 22, 10),
+    ElementTitle = Color3.fromRGB(255, 245, 220),
+    ElementDesc = Color3.fromRGB(200, 170, 110),
+})
+
+WindUI:SetTheme("Graphite")
+
+local themeBackgrounds = {
+    Graphite = "rbxassetid://83511264088514",
+    ["Neon Blue"] = "rbxassetid://91622993482762",
+    Golden = "rbxassetid://73167161449222",
+}
 
 local Window = WindUI:CreateWindow({
-    Title = "Vortex X Sage [Survival Disaster]",
-    Icon = "rbxassetid://118833096342184",
-    IconSize = 35,
-    Author = "By Israelcc",
-    Folder = "VortexXSage",
-    Background = "rbxassetid://133044138027516",
-    Size = UDim2.fromOffset(620, 500),
-    MinSize = Vector2.new(420, 320),
-    MaxSize = Vector2.new(1000, 750),
-    Resizable = true,
-    HideSearchBar = true,
+    Title = "FlexusHub [Survival Disaster]",
+    Author = "Flexus-Team",
+    Folder = "FlexusHub_SurvivalDisaster",
+    ConfigName = "FlexusHub_SurvivalDisaster",
+    Theme = "Graphite",
+    Size = UDim2.fromOffset(520, 405),
+    MinSize = Vector2.new(440, 335),
+    MaxSize = Vector2.new(650, 500),
+    Icon = "rbxassetid://78482030075403",
+    IconThemed = true,
+    Background = "rbxassetid://83511264088514",
+    BackgroundImageTransparency = 0.22,
     Transparent = false,
-    Theme = "VortexGoldSolid",
-    User = { Enabled = true, Anonymous = false },
+    Acrylic = false,
+    SideBarWidth = 145,
+    ElementsRadius = 12,
+    ScrollBarEnabled = true,
+    HideSearchBar = true,
+    Resizable = true,
+    ModernLayout = true,
+    ModernLayoutMergeElements = false,
+    HidePanelBackground = false,
+    BottomDragBarEnabled = true,
+    OpenButton = {
+        Enabled = true,
+        Title = "FlexusHub [SD]",
+        Icon = "rbxassetid://78482030075403",
+        OnlyMobile = false,
+        Draggable = true,
+        Scale = 0.82,
+        StrokeThickness = 1,
+        Color = ColorSequence.new(Color3.fromRGB(118, 118, 124), Color3.fromRGB(164, 164, 170)),
+    },
 })
+pcall(function() Window:SetIconSize(30) end)
 
 pcall(function()
     Window:EditOpenButton({
-        Title = "VXS",
-        Icon = "rbxassetid://118833096342184",
-        CornerRadius = UDim.new(1, 0),
-        StrokeThickness = 2,
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(160, 110, 20)),
-            ColorSequenceKeypoint.new(0.4, Color3.fromRGB(220, 170, 40)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 215, 90)),
-        }),
+        Title = "FlexusHub [SD]",
+        Icon = "rbxassetid://78482030075403",
+        CornerRadius = UDim.new(0, 10),
+        StrokeThickness = 1,
+        Color = ColorSequence.new(Color3.fromRGB(118, 118, 124), Color3.fromRGB(164, 164, 170)),
         OnlyMobile = false,
         Enabled = true,
         Draggable = true,
@@ -884,16 +791,17 @@ pcall(function()
 end)
 
 pcall(function()
-    Window:Tag({ Title = "Fling", Icon = "zap", Color = Color3.fromRGB(220, 170, 40) })
+    Window:Tag({ Title = "SD", Icon = "zap", Color = Color3.fromRGB(180, 180, 190) })
 end)
 
 Window:SetToggleKey(EmoteFlingConfig.ToggleKey or Enum.KeyCode.K)
+
 
 local mainSec = Window:Section({ Title = "Main", Opened = true })
 local extraSec = Window:Section({ Title = "Extra", Opened = true })
 
 -- ========== TABS ==========
-local infoTab = mainSec:Tab({ Title = "Info", Icon = "info", ShowTabTitle = true, Border = true })
+local infoTab = mainSec:Tab({ Title = "Information", Icon = "badge-info", ShowTabTitle = true, Border = true })
 local flingTab = mainSec:Tab({ Title = "Fling", Icon = "zap", ShowTabTitle = true, Border = true })
 local utilityTab = mainSec:Tab({ Title = "Utility", Icon = "sparkles", ShowTabTitle = true, Border = true })
 local survivalTab = mainSec:Tab({ Title = "Survival", Icon = "balloon", ShowTabTitle = true, Border = true })
@@ -910,20 +818,20 @@ local fpsScreenGui = nil
 local fpsPingLabel = nil
 local fpsFrames, fpsLast, fpsValue = 0, tick(), 0
 RunService.RenderStepped:Connect(function()
-	fpsFrames = fpsFrames + 1
-	local now = tick()
-	if now - fpsLast >= 1 then
-		fpsValue = fpsFrames
-		fpsFrames = 0
-		fpsLast = now
-	end
-	if showFpsPing and fpsPingLabel then
-		local ping = 0
-		pcall(function()
-			ping = math.floor(LocalPlayer:GetNetworkPing() * 1000)
-		end)
-		fpsPingLabel.Text = "FPS: " .. tostring(fpsValue) .. "\nPing: " .. tostring(ping) .. " ms"
-	end
+        fpsFrames = fpsFrames + 1
+        local now = tick()
+        if now - fpsLast >= 1 then
+                fpsValue = fpsFrames
+                fpsFrames = 0
+                fpsLast = now
+        end
+        if showFpsPing and fpsPingLabel then
+                local ping = 0
+                pcall(function()
+                        ping = math.floor(LocalPlayer:GetNetworkPing() * 1000)
+                end)
+                fpsPingLabel.Text = "FPS: " .. tostring(fpsValue) .. "\nPing: " .. tostring(ping) .. " ms"
+        end
 end)
 
 -- Fling UI
@@ -1022,23 +930,23 @@ RegisterConnection("FlingInputConn", UserInputService.InputBegan:Connect(functio
     end
 end))
 
--- ========== BUBBLES (Vortex FAB style) ==========
-local FAB_GOLD = Color3.fromRGB(255, 200, 55)
+-- ========== BUBBLES (FlexusHub FAB style) ==========
+local FAB_GOLD = Color3.fromRGB(200, 200, 210)
 local FAB_GLASS = Color3.fromRGB(8, 12, 20)
 local FAB_GLASS_T = 0.35
 
-local _VortexIcons, _VortexIconReady = nil, false
-local _VortexIconQueue = {}
+local _FlexusIcons, _FlexusIconReady = nil, false
+local _FlexusIconQueue = {}
 task.spawn(function()
     local ok, res = pcall(function()
         return loadstring(game:HttpGet("https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/refs/heads/main/icons.lua"))()
     end)
     if ok and type(res) == "table" then
-        _VortexIcons = res
-        _VortexIconReady = true
-        for _, q in ipairs(_VortexIconQueue) do
+        _FlexusIcons = res
+        _FlexusIconReady = true
+        for _, q in ipairs(_FlexusIconQueue) do
             pcall(function()
-                local entry = _VortexIcons["48px"] and _VortexIcons["48px"][q.name]
+                local entry = _FlexusIcons["48px"] and _FlexusIcons["48px"][q.name]
                 if entry and q.img and q.img.Parent then
                     q.img.Image = "rbxassetid://" .. tostring(entry[1])
                     q.img.ImageRectSize = Vector2.new(entry[2][1], entry[2][2])
@@ -1046,21 +954,21 @@ task.spawn(function()
                 end
             end)
         end
-        table.clear(_VortexIconQueue)
+        table.clear(_FlexusIconQueue)
     end
 end)
 
-local function applyLucideIcon(img, iconName)
+local function applyFlexusIcon(img, iconName)
     if not img then return end
     iconName = tostring(iconName or "zap")
-    local atlas = _VortexIcons and _VortexIcons["48px"]
-    if _VortexIconReady and atlas and atlas[iconName] then
+    local atlas = _FlexusIcons and _FlexusIcons["48px"]
+    if _FlexusIconReady and atlas and atlas[iconName] then
         local entry = atlas[iconName]
         img.Image = "rbxassetid://" .. tostring(entry[1])
         img.ImageRectSize = Vector2.new(entry[2][1], entry[2][2])
         img.ImageRectOffset = Vector2.new(entry[3][1], entry[3][2])
     else
-        table.insert(_VortexIconQueue, { img = img, name = iconName })
+        table.insert(_FlexusIconQueue, { img = img, name = iconName })
     end
 end
 
@@ -1094,7 +1002,7 @@ local function makeDraggable(trigger, target, canDragFn)
 end
 
 local bubblesScreenGui = Instance.new("ScreenGui")
-bubblesScreenGui.Name = "VXEmoteBubbles"
+bubblesScreenGui.Name = "FlexusHub_SD_Bubbles"
 bubblesScreenGui.ResetOnSpawn = false
 bubblesScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 bubblesScreenGui.IgnoreGuiInset = true
@@ -1170,7 +1078,7 @@ local function createVaporStyleFab(parent, cfg)
     fabIco.ImageColor3 = FAB_GOLD
     fabIco.ZIndex = Fab.ZIndex + 2
     fabIco.Parent = Fab
-    applyLucideIcon(fabIco, cfg.Icon or "zap")
+    applyFlexusIcon(fabIco, cfg.Icon or "zap")
 
     local FabBtn = Instance.new("TextButton")
     FabBtn.Name = "Hit"
@@ -1260,220 +1168,220 @@ local auraTitleLabel = nil
 
 -- Network exactamente como el script original
 if not getgenv().Network then
-	getgenv().Network = {
-		BaseParts = {},
-		Velocity = Vector3.new(14.46262424, 14.46262424, 14.46262424),
-	}
-	getgenv().Network.RetainPart = function(Part)
-		if typeof(Part) == "Instance" and Part:IsA("BasePart") and Part:IsDescendantOf(workspace) then
-			table.insert(getgenv().Network.BaseParts, Part)
-			Part.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
-			Part.CanCollide = false
-		end
-	end
-	local function EnablePartControl()
-		LocalPlayer.ReplicationFocus = workspace
-		RunService.Heartbeat:Connect(function()
-			pcall(function()
-				if sethiddenproperty then
-					sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
-				end
-			end)
-			for _, Part in pairs(getgenv().Network.BaseParts) do
-				if Part:IsDescendantOf(workspace) then
-					Part.Velocity = getgenv().Network.Velocity
-				end
-			end
-		end)
-	end
-	EnablePartControl()
+        getgenv().Network = {
+                BaseParts = {},
+                Velocity = Vector3.new(14.46262424, 14.46262424, 14.46262424),
+        }
+        getgenv().Network.RetainPart = function(Part)
+                if typeof(Part) == "Instance" and Part:IsA("BasePart") and Part:IsDescendantOf(workspace) then
+                        table.insert(getgenv().Network.BaseParts, Part)
+                        Part.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
+                        Part.CanCollide = false
+                end
+        end
+        local function EnablePartControl()
+                LocalPlayer.ReplicationFocus = workspace
+                RunService.Heartbeat:Connect(function()
+                        pcall(function()
+                                if sethiddenproperty then
+                                        sethiddenproperty(LocalPlayer, "SimulationRadius", math.huge)
+                                end
+                        end)
+                        for _, Part in pairs(getgenv().Network.BaseParts) do
+                                if Part:IsDescendantOf(workspace) then
+                                        Part.Velocity = getgenv().Network.Velocity
+                                end
+                        end
+                end)
+        end
+        EnablePartControl()
 end
 
 local function AuraRetainPart(Part)
-	if Part:IsA("BasePart") and not Part.Anchored and Part:IsDescendantOf(workspace) then
-		if Part.Parent == LocalPlayer.Character or Part:IsDescendantOf(LocalPlayer.Character) then
-			return false
-		end
-		Part.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
-		Part.CanCollide = false
-		return true
-	end
-	return false
+        if Part:IsA("BasePart") and not Part.Anchored and Part:IsDescendantOf(workspace) then
+                if Part.Parent == LocalPlayer.Character or Part:IsDescendantOf(LocalPlayer.Character) then
+                        return false
+                end
+                Part.CustomPhysicalProperties = PhysicalProperties.new(0, 0, 0, 0, 0)
+                Part.CanCollide = false
+                return true
+        end
+        return false
 end
 
 local function auraAddPart(part)
-	if AuraRetainPart(part) then
-		if not table.find(auraParts, part) then
-			table.insert(auraParts, part)
-		end
-	end
+        if AuraRetainPart(part) then
+                if not table.find(auraParts, part) then
+                        table.insert(auraParts, part)
+                end
+        end
 end
 
 local function auraRemovePart(part)
-	local index = table.find(auraParts, part)
-	if index then
-		table.remove(auraParts, index)
-	end
+        local index = table.find(auraParts, part)
+        if index then
+                table.remove(auraParts, index)
+        end
 end
 
 for _, part in pairs(workspace:GetDescendants()) do
-	auraAddPart(part)
+        auraAddPart(part)
 end
 workspace.DescendantAdded:Connect(auraAddPart)
 workspace.DescendantRemoving:Connect(auraRemovePart)
 
 -- Heartbeat: partes orbitan alrededor del jugador (logica original)
 RunService.Heartbeat:Connect(function()
-	if not auraEnabled then return end
+        if not auraEnabled then return end
 
-	local humanoidRootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-	if humanoidRootPart then
-		local tornadoCenter = humanoidRootPart.Position
-		local radius = auraRadius
-		local height = auraHeight
-		local rotationSpeed = auraRotSpeed
-		local attractionStrength = auraAttraction
-		for _, part in pairs(auraParts) do
-			if part.Parent and not part.Anchored then
-				local pos = part.Position
-				local distance = (Vector3.new(pos.X, tornadoCenter.Y, pos.Z) - tornadoCenter).Magnitude
-				local angle = math.atan2(pos.Z - tornadoCenter.Z, pos.X - tornadoCenter.X)
-				local newAngle = angle + math.rad(rotationSpeed)
-				local targetPos = Vector3.new(
-					tornadoCenter.X + math.cos(newAngle) * math.min(radius, distance),
-					tornadoCenter.Y + (height * (math.abs(math.sin((pos.Y - tornadoCenter.Y) / height)))),
-					tornadoCenter.Z + math.sin(newAngle) * math.min(radius, distance)
-				)
-				local directionToTarget = (targetPos - part.Position).Unit
-				part.Velocity = directionToTarget * attractionStrength
-			end
-		end
-	end
+        local humanoidRootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+                local tornadoCenter = humanoidRootPart.Position
+                local radius = auraRadius
+                local height = auraHeight
+                local rotationSpeed = auraRotSpeed
+                local attractionStrength = auraAttraction
+                for _, part in pairs(auraParts) do
+                        if part.Parent and not part.Anchored then
+                                local pos = part.Position
+                                local distance = (Vector3.new(pos.X, tornadoCenter.Y, pos.Z) - tornadoCenter).Magnitude
+                                local angle = math.atan2(pos.Z - tornadoCenter.Z, pos.X - tornadoCenter.X)
+                                local newAngle = angle + math.rad(rotationSpeed)
+                                local targetPos = Vector3.new(
+                                        tornadoCenter.X + math.cos(newAngle) * math.min(radius, distance),
+                                        tornadoCenter.Y + (height * (math.abs(math.sin((pos.Y - tornadoCenter.Y) / height)))),
+                                        tornadoCenter.Z + math.sin(newAngle) * math.min(radius, distance)
+                                )
+                                local directionToTarget = (targetPos - part.Position).Unit
+                                part.Velocity = directionToTarget * attractionStrength
+                        end
+                end
+        end
 end)
 
 local function setAuraBubbleVisual()
-	pcall(function()
-		local st = auraBubbleFab and auraBubbleFab:FindFirstChild("Stroke")
-		local ic = auraBubbleFab and auraBubbleFab:FindFirstChild("Icon")
-		if auraEnabled then
-			if st then st.Color = Color3.fromRGB(120, 180, 255); st.Transparency = 0.15 end
-			if ic then ic.ImageColor3 = Color3.fromRGB(120, 180, 255) end
-		else
-			if st then st.Color = Color3.fromRGB(255, 200, 55); st.Transparency = 0.45 end
-			if ic then ic.ImageColor3 = Color3.fromRGB(255, 200, 55) end
-		end
-	end)
-	if auraToggleBtn then
-		if auraEnabled then
-			auraToggleBtn.Text = "Aura: ON"
-			auraToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 180)
-		else
-			auraToggleBtn.Text = "Aura: OFF"
-			auraToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 55)
-		end
-	end
-	if auraTitleLabel then
-		auraTitleLabel.Text = "Aura de Items  [" .. tostring(auraRadius) .. "]"
-	end
+        pcall(function()
+                local st = auraBubbleFab and auraBubbleFab:FindFirstChild("Stroke")
+                local ic = auraBubbleFab and auraBubbleFab:FindFirstChild("Icon")
+                if auraEnabled then
+                        if st then st.Color = Color3.fromRGB(120, 180, 255); st.Transparency = 0.15 end
+                        if ic then ic.ImageColor3 = Color3.fromRGB(120, 180, 255) end
+                else
+                        if st then st.Color = Color3.fromRGB(200, 200, 210); st.Transparency = 0.45 end
+                        if ic then ic.ImageColor3 = Color3.fromRGB(200, 200, 210) end
+                end
+        end)
+        if auraToggleBtn then
+                if auraEnabled then
+                        auraToggleBtn.Text = "Aura: ON"
+                        auraToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 180)
+                else
+                        auraToggleBtn.Text = "Aura: OFF"
+                        auraToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 55)
+                end
+        end
+        if auraTitleLabel then
+                auraTitleLabel.Text = "Aura de Items  [" .. tostring(auraRadius) .. "]"
+        end
 end
 
 local function buildAuraMenu()
-	if auraMenu and auraMenu.Parent then return end
-	local gui = bubblesScreenGui
-	if not gui then return end
+        if auraMenu and auraMenu.Parent then return end
+        local gui = bubblesScreenGui
+        if not gui then return end
 
-	local menu = Instance.new("Frame")
-	menu.Name = "AuraItemsMenu"
-	menu.Size = UDim2.fromOffset(158, 138)
-	menu.AnchorPoint = Vector2.new(1, 0.5)
-	menu.Position = UDim2.new(1, -72, 0.5, 160)
-	menu.BackgroundColor3 = Color3.fromRGB(8, 12, 20)
-	menu.BackgroundTransparency = 0.28
-	menu.BorderSizePixel = 0
-	menu.Visible = false
-	menu.ZIndex = 130
-	menu.Parent = gui
-	Instance.new("UICorner", menu).CornerRadius = UDim.new(0, 12)
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(255, 200, 55)
-	stroke.Thickness = 1.5
-	stroke.Transparency = 0.4
-	stroke.Parent = menu
+        local menu = Instance.new("Frame")
+        menu.Name = "AuraItemsMenu"
+        menu.Size = UDim2.fromOffset(158, 138)
+        menu.AnchorPoint = Vector2.new(1, 0.5)
+        menu.Position = UDim2.new(1, -72, 0.5, 160)
+        menu.BackgroundColor3 = Color3.fromRGB(8, 12, 20)
+        menu.BackgroundTransparency = 0.28
+        menu.BorderSizePixel = 0
+        menu.Visible = false
+        menu.ZIndex = 130
+        menu.Parent = gui
+        Instance.new("UICorner", menu).CornerRadius = UDim.new(0, 12)
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(200, 200, 210)
+        stroke.Thickness = 1.5
+        stroke.Transparency = 0.4
+        stroke.Parent = menu
 
-	local title = Instance.new("TextLabel")
-	title.BackgroundTransparency = 1
-	title.Size = UDim2.new(1, -10, 0, 20)
-	title.Position = UDim2.fromOffset(6, 6)
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 12
-	title.TextColor3 = Color3.fromRGB(255, 220, 90)
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.Text = "Aura de Items  [50]"
-	title.ZIndex = 131
-	title.Parent = menu
-	auraTitleLabel = title
+        local title = Instance.new("TextLabel")
+        title.BackgroundTransparency = 1
+        title.Size = UDim2.new(1, -10, 0, 20)
+        title.Position = UDim2.fromOffset(6, 6)
+        title.Font = Enum.Font.GothamBold
+        title.TextSize = 12
+        title.TextColor3 = Color3.fromRGB(230, 230, 235)
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.Text = "Aura de Items  [50]"
+        title.ZIndex = 131
+        title.Parent = menu
+        auraTitleLabel = title
 
-	local function mkBtn(text, y, bg)
-		local b = Instance.new("TextButton")
-		b.Size = UDim2.new(1, -14, 0, 26)
-		b.Position = UDim2.fromOffset(7, y)
-		b.BackgroundColor3 = bg
-		b.BackgroundTransparency = 0.2
-		b.Text = text
-		b.Font = Enum.Font.GothamBold
-		b.TextSize = 12
-		b.TextColor3 = Color3.fromRGB(255, 255, 255)
-		b.ZIndex = 132
-		b.Parent = menu
-		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-		local bs = Instance.new("UIStroke")
-		bs.Color = Color3.fromRGB(255, 200, 55)
-		bs.Thickness = 1
-		bs.Transparency = 0.55
-		bs.Parent = b
-		return b
-	end
+        local function mkBtn(text, y, bg)
+                local b = Instance.new("TextButton")
+                b.Size = UDim2.new(1, -14, 0, 26)
+                b.Position = UDim2.fromOffset(7, y)
+                b.BackgroundColor3 = bg
+                b.BackgroundTransparency = 0.2
+                b.Text = text
+                b.Font = Enum.Font.GothamBold
+                b.TextSize = 12
+                b.TextColor3 = Color3.fromRGB(255, 255, 255)
+                b.ZIndex = 132
+                b.Parent = menu
+                Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+                local bs = Instance.new("UIStroke")
+                bs.Color = Color3.fromRGB(200, 200, 210)
+                bs.Thickness = 1
+                bs.Transparency = 0.55
+                bs.Parent = b
+                return b
+        end
 
-	auraToggleBtn = mkBtn("Aura: OFF", 30, Color3.fromRGB(40, 45, 55))
-	local decBtn = mkBtn("Radius  -", 62, Color3.fromRGB(35, 40, 50))
-	local incBtn = mkBtn("Radius  +", 94, Color3.fromRGB(35, 40, 50))
+        auraToggleBtn = mkBtn("Aura: OFF", 30, Color3.fromRGB(40, 45, 55))
+        local decBtn = mkBtn("Radius  -", 62, Color3.fromRGB(35, 40, 50))
+        local incBtn = mkBtn("Radius  +", 94, Color3.fromRGB(35, 40, 50))
 
-	auraToggleBtn.MouseButton1Click:Connect(function()
-		auraEnabled = not auraEnabled
-		setAuraBubbleVisual()
-		Notify({
-			Title = "Aura de Items",
-			Content = auraEnabled and "ON - objetos orbitan a tu alrededor" or "OFF",
-			Duration = 2,
-			Icon = "sparkles",
-		})
-	end)
+        auraToggleBtn.MouseButton1Click:Connect(function()
+                auraEnabled = not auraEnabled
+                setAuraBubbleVisual()
+                Notify({
+                        Title = "Aura de Items",
+                        Content = auraEnabled and "ON - objetos orbitan a tu alrededor" or "OFF",
+                        Duration = 2,
+                        Icon = "sparkles",
+                })
+        end)
 
-	decBtn.MouseButton1Click:Connect(function()
-		auraRadius = math.max(10, auraRadius - 5)
-		setAuraBubbleVisual()
-	end)
-	incBtn.MouseButton1Click:Connect(function()
-		auraRadius = math.min(100, auraRadius + 5)
-		setAuraBubbleVisual()
-	end)
+        decBtn.MouseButton1Click:Connect(function()
+                auraRadius = math.max(10, auraRadius - 5)
+                setAuraBubbleVisual()
+        end)
+        incBtn.MouseButton1Click:Connect(function()
+                auraRadius = math.min(100, auraRadius + 5)
+                setAuraBubbleVisual()
+        end)
 
-	makeDraggable(menu, menu, function() return true end)
-	auraMenu = menu
+        makeDraggable(menu, menu, function() return true end)
+        auraMenu = menu
 end
 
 local function openAuraMenu()
-	buildAuraMenu()
-	if not auraMenu then return end
-	if auraBubbleFab and auraBubbleFab.Parent then
-		local pos = auraBubbleFab.AbsolutePosition
-		local sz = auraBubbleFab.AbsoluteSize
-		auraMenu.Position = UDim2.fromOffset(pos.X - 10, pos.Y + sz.Y / 2)
-		auraMenu.AnchorPoint = Vector2.new(1, 0.5)
-	end
-	auraMenuVisible = not auraMenuVisible
-	auraMenu.Visible = auraMenuVisible
-	setAuraBubbleVisual()
+        buildAuraMenu()
+        if not auraMenu then return end
+        if auraBubbleFab and auraBubbleFab.Parent then
+                local pos = auraBubbleFab.AbsolutePosition
+                local sz = auraBubbleFab.AbsoluteSize
+                auraMenu.Position = UDim2.fromOffset(pos.X - 10, pos.Y + sz.Y / 2)
+                auraMenu.AnchorPoint = Vector2.new(1, 0.5)
+        end
+        auraMenuVisible = not auraMenuVisible
+        auraMenu.Visible = auraMenuVisible
+        setAuraBubbleVisual()
 end
 
 -- ========== FLY MINI MENU ==========
@@ -1483,108 +1391,108 @@ local flyToggleBtn = nil
 local flyTitleLabel = nil
 
 local function setFlyMenuVisual()
-	if flyTitleLabel then
-		flyTitleLabel.Text = "Fly  [" .. tostring(math.floor(flySpeed or 90)) .. "]"
-	end
-	if flyToggleBtn then
-		if flyEnabled then
-			flyToggleBtn.Text = "Fly: ON"
-			flyToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 180)
-		else
-			flyToggleBtn.Text = "Fly: OFF"
-			flyToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 55)
-		end
-	end
-	pcall(function() setFlyBubbleVisual(flyEnabled) end)
+        if flyTitleLabel then
+                flyTitleLabel.Text = "Fly  [" .. tostring(math.floor(flySpeed or 90)) .. "]"
+        end
+        if flyToggleBtn then
+                if flyEnabled then
+                        flyToggleBtn.Text = "Fly: ON"
+                        flyToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 180)
+                else
+                        flyToggleBtn.Text = "Fly: OFF"
+                        flyToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 55)
+                end
+        end
+        pcall(function() setFlyBubbleVisual(flyEnabled) end)
 end
 
 local function buildFlyMenu()
-	if flyMenu and flyMenu.Parent then return end
-	local gui = bubblesScreenGui
-	if not gui then return end
-	local menu = Instance.new("Frame")
-	menu.Name = "FlyMiniMenu"
-	menu.Size = UDim2.fromOffset(158, 138)
-	menu.AnchorPoint = Vector2.new(1, 0.5)
-	menu.Position = UDim2.new(1, -72, 0.5, 0)
-	menu.BackgroundColor3 = Color3.fromRGB(8, 12, 20)
-	menu.BackgroundTransparency = 0.28
-	menu.BorderSizePixel = 0
-	menu.Visible = false
-	menu.ZIndex = 130
-	menu.Parent = gui
-	Instance.new("UICorner", menu).CornerRadius = UDim.new(0, 12)
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(120, 200, 255)
-	stroke.Thickness = 1.5
-	stroke.Transparency = 0.4
-	stroke.Parent = menu
-	local title = Instance.new("TextLabel")
-	title.BackgroundTransparency = 1
-	title.Size = UDim2.new(1, -10, 0, 20)
-	title.Position = UDim2.fromOffset(6, 6)
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 12
-	title.TextColor3 = Color3.fromRGB(140, 210, 255)
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.Text = "Fly  [90]"
-	title.ZIndex = 131
-	title.Parent = menu
-	flyTitleLabel = title
-	local function mkBtn(text, y, bg)
-		local b = Instance.new("TextButton")
-		b.Size = UDim2.new(1, -14, 0, 26)
-		b.Position = UDim2.fromOffset(7, y)
-		b.BackgroundColor3 = bg
-		b.BackgroundTransparency = 0.2
-		b.Text = text
-		b.Font = Enum.Font.GothamBold
-		b.TextSize = 12
-		b.TextColor3 = Color3.fromRGB(255, 255, 255)
-		b.ZIndex = 132
-		b.Parent = menu
-		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-		local bs = Instance.new("UIStroke")
-		bs.Color = Color3.fromRGB(120, 200, 255)
-		bs.Thickness = 1
-		bs.Transparency = 0.55
-		bs.Parent = b
-		return b
-	end
-	flyToggleBtn = mkBtn("Fly: OFF", 30, Color3.fromRGB(40, 45, 55))
-	local decB = mkBtn("Speed  -", 62, Color3.fromRGB(35, 40, 50))
-	local incB = mkBtn("Speed  +", 94, Color3.fromRGB(35, 40, 50))
-	flyToggleBtn.MouseButton1Click:Connect(function()
-		toggleFly()
-		setFlyMenuVisual()
-	end)
-	decB.MouseButton1Click:Connect(function()
-		flySpeed = math.max(30, (flySpeed or 90) - 10)
-		setFlyMenuVisual()
-	end)
-	incB.MouseButton1Click:Connect(function()
-		flySpeed = math.min(250, (flySpeed or 90) + 10)
-		setFlyMenuVisual()
-	end)
-	if makeDraggable then
-		makeDraggable(menu, menu, function() return true end)
-	end
-	flyMenu = menu
+        if flyMenu and flyMenu.Parent then return end
+        local gui = bubblesScreenGui
+        if not gui then return end
+        local menu = Instance.new("Frame")
+        menu.Name = "FlyMiniMenu"
+        menu.Size = UDim2.fromOffset(158, 138)
+        menu.AnchorPoint = Vector2.new(1, 0.5)
+        menu.Position = UDim2.new(1, -72, 0.5, 0)
+        menu.BackgroundColor3 = Color3.fromRGB(8, 12, 20)
+        menu.BackgroundTransparency = 0.28
+        menu.BorderSizePixel = 0
+        menu.Visible = false
+        menu.ZIndex = 130
+        menu.Parent = gui
+        Instance.new("UICorner", menu).CornerRadius = UDim.new(0, 12)
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = Color3.fromRGB(120, 200, 255)
+        stroke.Thickness = 1.5
+        stroke.Transparency = 0.4
+        stroke.Parent = menu
+        local title = Instance.new("TextLabel")
+        title.BackgroundTransparency = 1
+        title.Size = UDim2.new(1, -10, 0, 20)
+        title.Position = UDim2.fromOffset(6, 6)
+        title.Font = Enum.Font.GothamBold
+        title.TextSize = 12
+        title.TextColor3 = Color3.fromRGB(140, 210, 255)
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.Text = "Fly  [90]"
+        title.ZIndex = 131
+        title.Parent = menu
+        flyTitleLabel = title
+        local function mkBtn(text, y, bg)
+                local b = Instance.new("TextButton")
+                b.Size = UDim2.new(1, -14, 0, 26)
+                b.Position = UDim2.fromOffset(7, y)
+                b.BackgroundColor3 = bg
+                b.BackgroundTransparency = 0.2
+                b.Text = text
+                b.Font = Enum.Font.GothamBold
+                b.TextSize = 12
+                b.TextColor3 = Color3.fromRGB(255, 255, 255)
+                b.ZIndex = 132
+                b.Parent = menu
+                Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+                local bs = Instance.new("UIStroke")
+                bs.Color = Color3.fromRGB(120, 200, 255)
+                bs.Thickness = 1
+                bs.Transparency = 0.55
+                bs.Parent = b
+                return b
+        end
+        flyToggleBtn = mkBtn("Fly: OFF", 30, Color3.fromRGB(40, 45, 55))
+        local decB = mkBtn("Speed  -", 62, Color3.fromRGB(35, 40, 50))
+        local incB = mkBtn("Speed  +", 94, Color3.fromRGB(35, 40, 50))
+        flyToggleBtn.MouseButton1Click:Connect(function()
+                toggleFly()
+                setFlyMenuVisual()
+        end)
+        decB.MouseButton1Click:Connect(function()
+                flySpeed = math.max(30, (flySpeed or 90) - 10)
+                setFlyMenuVisual()
+        end)
+        incB.MouseButton1Click:Connect(function()
+                flySpeed = math.min(250, (flySpeed or 90) + 10)
+                setFlyMenuVisual()
+        end)
+        if makeDraggable then
+                makeDraggable(menu, menu, function() return true end)
+        end
+        flyMenu = menu
 end
 
 local function openFlyMenu()
-	if not bubblesScreenGui then return end
-	buildFlyMenu()
-	if not flyMenu then return end
-	if flyBubbleFab and flyBubbleFab.Parent then
-		local pos = flyBubbleFab.AbsolutePosition
-		local sz = flyBubbleFab.AbsoluteSize
-		flyMenu.Position = UDim2.fromOffset(pos.X - 10, pos.Y + sz.Y / 2)
-		flyMenu.AnchorPoint = Vector2.new(1, 0.5)
-	end
-	flyMenuVisible = not flyMenuVisible
-	flyMenu.Visible = flyMenuVisible
-	setFlyMenuVisual()
+        if not bubblesScreenGui then return end
+        buildFlyMenu()
+        if not flyMenu then return end
+        if flyBubbleFab and flyBubbleFab.Parent then
+                local pos = flyBubbleFab.AbsolutePosition
+                local sz = flyBubbleFab.AbsoluteSize
+                flyMenu.Position = UDim2.fromOffset(pos.X - 10, pos.Y + sz.Y / 2)
+                flyMenu.AnchorPoint = Vector2.new(1, 0.5)
+        end
+        flyMenuVisible = not flyMenuVisible
+        flyMenu.Visible = flyMenuVisible
+        setFlyMenuVisual()
 end
 
 -- Layout: 2 columns mid-right (presets + custom)
@@ -2062,42 +1970,185 @@ protectTab:Toggle({
     Callback = function(Value) OnNoClipToggle(Value, not UI_Loaded) end,
 })
 
--- ========== INFO ==========
-infoTab:Section({ Title = "Acerca del Script" })
+-- ========== INFORMATION ==========
+infoTab:Divider({ Title = "Acerca de" })
 
 infoTab:Paragraph({
-    Title = "Vortex X Sage [Survival Disaster]",
-    Desc = "Script multi-executor para Natural Disaster Survival y juegos similares.\nIncluye Emote Fling, Fly Superman, Aura de Items, protecciones, bubbles y utilidades.\nCompatible con PC y movil (Delta, Hydrogen, CodeX, etc.).\n\nDesarrollador: Israelcc\nUI: WindUI\nTema: VortexGoldSolid",
+    Title = "FlexusHub [Survival Disaster]",
+    Desc = "Script multi-executor para Natural Disaster Survival y juegos similares.\nIncluye Emote Fling, Fly, Aura de Items, protecciones, bubbles y utilidades.\nCompatible con PC y movil (Delta, Hydrogen, CodeX, etc.).\n\nDesarrollador: Flexus-Team\nUI: WindUI\nVersion: FlexusHub",
+    Image = "rbxassetid://78482030075403",
+    ImageSize = 72,
 })
 
 infoTab:Paragraph({
-    Title = "Desarrollador",
-    Desc = "Israelcc\nDesarrollo principal, mantenimiento y actualizaciones.",
+    Title = "Developer",
+    Desc = "FlexusHub\nDesarrollo, mantenimiento y actualizaciones del script.",
 })
 
-infoTab:Divider()
+infoTab:Divider({ Title = "Comunidad" })
 
-infoTab:Paragraph({
-    Title = "Unete a nuestro Discord",
-    Desc = "Unete a nuestra comunidad oficial para soporte, actualizaciones y hablar con otros miembros.\n\nhttps://discord.gg/Fn74MpzFUn",
-    Image = "rbxassetid://88267176037146",
-    ImageSize = 80,
+local currentThemeName = "Graphite"
+local function getThemeBannerImage(themeName)
+    return themeBackgrounds[themeName] or themeBackgrounds.Graphite or "rbxassetid://83511264088514"
+end
+
+local discordBanner = infoTab:Paragraph({
+    Title = "Discord FlexusHub",
+    Desc = "Unete a la comunidad oficial para soporte, updates y chat.\nhttps://discord.gg/Fn74MpzFUn",
+    Image = getThemeBannerImage(currentThemeName),
+    ImageSize = 140,
+})
+
+local function updateDiscordBannerImage(themeName)
+    currentThemeName = themeName or currentThemeName
+    local img = getThemeBannerImage(currentThemeName)
+    if not discordBanner then return end
+    pcall(function()
+        if type(discordBanner.SetImage) == "function" then
+            discordBanner:SetImage(img)
+        elseif type(discordBanner.Set) == "function" then
+            discordBanner:Set({ Image = img })
+        elseif discordBanner.Image ~= nil then
+            discordBanner.Image = img
+        end
+    end)
+end
+
+infoTab:Button({
+    Title = "Copiar Discord",
+    Icon = "message-circle",
+    Callback = function()
+        pcall(function()
+            if setclipboard then setclipboard("https://discord.gg/Fn74MpzFUn")
+            elseif setclip then setclip("https://discord.gg/Fn74MpzFUn")
+            elseif toclipboard then toclipboard("https://discord.gg/Fn74MpzFUn") end
+        end)
+        showBottomMessage("Discord copiado al portapapeles")
+    end,
 })
 
 infoTab:Button({
-    Title = "Copiar enlace de Discord",
-    Desc = "Copia el invite de Discord de Vortex al portapapeles.",
+    Title = "Copiar Website",
+    Icon = "globe",
     Callback = function()
         pcall(function()
-            if setclipboard then
-                setclipboard("https://discord.gg/Fn74MpzFUn")
-            elseif setclip then
-                setclip("https://discord.gg/Fn74MpzFUn")
-            elseif toclipboard then
-                toclipboard("https://discord.gg/Fn74MpzFUn")
+            if setclipboard then setclipboard("https://flexushub-scripts.netlify.app/")
+            elseif setclip then setclip("https://flexushub-scripts.netlify.app/")
+            elseif toclipboard then toclipboard("https://flexushub-scripts.netlify.app/") end
+        end)
+        showBottomMessage("Website copiado al portapapeles")
+    end,
+})
+
+infoTab:Divider({ Title = "Apariencia" })
+
+infoTab:Dropdown({
+    Title = "Theme",
+    Values = { "Graphite", "Neon Blue", "Golden" },
+    Value = "Graphite",
+    Callback = function(themeName)
+        themeName = tostring(themeName or "Graphite")
+        local background = themeBackgrounds[themeName]
+        if background then
+            pcall(function() WindUI:SetTheme(themeName) end)
+            pcall(function()
+                if Window.SetBackgroundImage then
+                    Window:SetBackgroundImage(background)
+                elseif Window.SetBackground then
+                    Window:SetBackground(background)
+                end
+            end)
+            pcall(function()
+                if Window.SetBackgroundImageTransparency then
+                    Window:SetBackgroundImageTransparency(0.22)
+                end
+            end)
+            pcall(function() updateDiscordBannerImage(themeName) end)
+            -- OpenButton colors by theme
+            pcall(function()
+                local seq
+                if themeName == "Golden" then
+                    seq = ColorSequence.new(Color3.fromRGB(180, 130, 30), Color3.fromRGB(255, 210, 90))
+                elseif themeName == "Neon Blue" then
+                    seq = ColorSequence.new(Color3.fromRGB(30, 90, 170), Color3.fromRGB(120, 190, 255))
+                else
+                    seq = ColorSequence.new(Color3.fromRGB(118, 118, 124), Color3.fromRGB(164, 164, 170))
+                end
+                Window:EditOpenButton({
+                    Title = "FlexusHub [SD]",
+                    Icon = "rbxassetid://78482030075403",
+                    Color = seq,
+                    StrokeThickness = 1,
+                })
+            end)
+            showBottomMessage("Theme: " .. themeName)
+        end
+    end,
+})
+
+infoTab:Divider({ Title = "Report Bug / Suggestion" })
+local reportText = ""
+local lastReportTime = 0
+infoTab:Input({
+    Title = "Mensaje",
+    Value = "",
+    Placeholder = "Describe el bug o sugerencia...",
+    Callback = function(t)
+        reportText = t
+    end,
+})
+infoTab:Button({
+    Title = "Enviar reporte",
+    Callback = function()
+        local currentTime = os.time()
+        if currentTime - lastReportTime < 60 then
+            showBottomMessage("Espera " .. tostring(60 - (currentTime - lastReportTime)) .. "s")
+            return
+        end
+        if reportText == "" or tostring(reportText):match("^%s*$") then
+            showBottomMessage("Escribe un mensaje primero")
+            return
+        end
+        lastReportTime = currentTime
+        local DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1555645993247051906/5spy-DPMDAL5qhbS2mk5S-wesGubALPm5JhtiNO9CR34A70x2VKTk2Du2jmTPx37cGi1"
+        local reportPlayer = LocalPlayer
+        local reportGameName = tostring(game.PlaceId)
+        pcall(function()
+            local info = MarketplaceService:GetProductInfo(game.PlaceId)
+            if info and info.Name then reportGameName = info.Name end
+        end)
+        local payload = HttpService:JSONEncode({
+            username = "FlexusHub Reports",
+            embeds = {{
+                title = "Report · Survival Disaster",
+                description = tostring(reportText),
+                color = 0xC8C8D0,
+                fields = {
+                    { name = "User", value = tostring(reportPlayer and reportPlayer.Name or "?") .. " (" .. tostring(reportPlayer and reportPlayer.UserId or "?") .. ")", inline = true },
+                    { name = "Game", value = tostring(reportGameName), inline = true },
+                    { name = "PlaceId", value = tostring(game.PlaceId), inline = true },
+                },
+            }},
+        })
+        local ok = false
+        pcall(function()
+            if request then
+                local r = request({ Url = DISCORD_WEBHOOK, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = payload })
+                ok = true
+            elseif http_request then
+                http_request({ Url = DISCORD_WEBHOOK, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = payload })
+                ok = true
+            elseif syn and syn.request then
+                syn.request({ Url = DISCORD_WEBHOOK, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = payload })
+                ok = true
             end
         end)
-        showBottomMessage("Link de Discord copiado al portapapeles!")
+        if ok then
+            showBottomMessage("Reporte enviado")
+            reportText = ""
+        else
+            showBottomMessage("No se pudo enviar el reporte")
+        end
     end,
 })
 
@@ -2129,6 +2180,7 @@ infoTab:Paragraph({
     Desc = tostring(nombreEjecutor),
 })
 
+
 infoTab:Section({ Title = "Monitor" })
 
 infoTab:Toggle({
@@ -2145,7 +2197,7 @@ infoTab:Toggle({
                         parent = LocalPlayer:FindFirstChildOfClass("PlayerGui")
                     end
                     fpsScreenGui = Instance.new("ScreenGui")
-                    fpsScreenGui.Name = "VortexFpsPing"
+                    fpsScreenGui.Name = "FlexusHub_FpsPing"
                     fpsScreenGui.ResetOnSpawn = false
                     fpsScreenGui.IgnoreGuiInset = true
                     fpsScreenGui.DisplayOrder = 99950
@@ -2154,13 +2206,13 @@ infoTab:Toggle({
                     box.AnchorPoint = Vector2.new(1, 0)
                     box.Position = UDim2.new(1, -12, 0, 10)
                     box.Size = UDim2.fromOffset(128, 44)
-                    box.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+                    box.BackgroundColor3 = Color3.fromRGB(12, 12, 14)
                     box.BackgroundTransparency = 0.15
                     box.BorderSizePixel = 0
                     box.Parent = fpsScreenGui
                     Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
                     local st = Instance.new("UIStroke")
-                    st.Color = Color3.fromRGB(255, 200, 55)
+                    st.Color = Color3.fromRGB(200, 200, 210)
                     st.Thickness = 1.2
                     st.Transparency = 0.35
                     st.Parent = box
@@ -2169,7 +2221,7 @@ infoTab:Toggle({
                     fpsPingLabel.Size = UDim2.fromScale(1, 1)
                     fpsPingLabel.Font = Enum.Font.GothamBold
                     fpsPingLabel.TextSize = 13
-                    fpsPingLabel.TextColor3 = Color3.fromRGB(255, 220, 90)
+                    fpsPingLabel.TextColor3 = Color3.fromRGB(230, 230, 235)
                     fpsPingLabel.Text = "FPS: --\nPing: --"
                     fpsPingLabel.TextYAlignment = Enum.TextYAlignment.Center
                     fpsPingLabel.Parent = box
@@ -2478,7 +2530,7 @@ pcall(function() Window:SetPanelBackground(true) end)
 configTab:Input({
     Title = "Background Image ID",
     Desc = "ID de Roblox para el fondo (rbxassetid://...).",
-    Value = "rbxassetid://133044138027516",
+    Value = "rbxassetid://83511264088514",
     Callback = function(input)
         pcall(function() Window:SetBackground(input) end)
     end,
@@ -2557,7 +2609,7 @@ else
     Notify({ Title = "Emote Fling", Content = "Modulo cargado.", Duration = 3, Icon = "check-circle" })
 end
 
-print("[Vortex X Sage] Survival Disaster WindUI loaded")
+print("[FlexusHub] Survival Disaster loaded")
 -- Autosave Survival options
 task.spawn(function()
     while true do
@@ -2567,31 +2619,3 @@ task.spawn(function()
 end)
 
 
--- Redirect WindUI notifications -> VortexNotify
-pcall(function()
-    if WindUI and type(WindUI) == "table" then
-        WindUI.Notify = function(_, opts)
-            opts = opts or {}
-            vortexNotify(opts.Title or opts.title, opts.Content or opts.content or opts.Text, opts.Duration or opts.duration)
-        end
-    end
-end)
-
-
--- Force all notifications through VortexNotify (no WindUI notify UI)
-pcall(function()
-    local function hookNotify(tbl)
-        if type(tbl) ~= "table" then return end
-        tbl.Notify = function(_, opts)
-            opts = type(opts) == "table" and opts or { Content = tostring(opts) }
-            local title = opts.Title or opts.title or "Vortex X Sage"
-            local content = opts.Content or opts.content or opts.Text or opts.text or ""
-            local dur = opts.Duration or opts.duration or 2.5
-            if VortexNotify and VortexNotify.Show then
-                VortexNotify.Show(tostring(title), tostring(content), tonumber(dur) or 2.5)
-            end
-        end
-    end
-    if WindUI then hookNotify(WindUI) end
-    if Window then hookNotify(Window) end
-end)
