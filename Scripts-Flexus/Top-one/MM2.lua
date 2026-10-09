@@ -1,4 +1,3 @@
--- FlexusHub [MM2] - WindUI (sin telemetría Onyx)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -13,13 +12,12 @@ local camera = workspace.CurrentCamera
 local Camera = camera
 local mouse = player:GetMouse()
 
--- 🔥 RUTAS DIRECTAS Y CACHÉ (Evita lag de llamadas constantes)
 local ws_Raycast = workspace.Raycast
 local cam_WTVP = workspace.CurrentCamera.WorldToViewportPoint
 local ffc = game.FindFirstChild
 
 local listaJugadores = Players:GetPlayers()
-local function cleanESP(_p) end -- stub; se redefine mas abajo
+local function cleanESP(_p) end
 Players.PlayerAdded:Connect(function(p) table.insert(listaJugadores, p) end)
 Players.PlayerRemoving:Connect(function(p)
     for i, v in ipairs(listaJugadores) do
@@ -31,13 +29,11 @@ Players.PlayerRemoving:Connect(function(p)
     end
 end)
 
--- Estado maestro
 local mState = {
     tESP = 0, tAura = 0, tStab = 0,
     espAct = false, auraAct = false, stabAct = false
 }
 
--- [REMOVED] Onyx web telemetry / AstraRequest
 
 local playerData = {}
 local espEnabled = false
@@ -47,7 +43,7 @@ local antiFlingConnection = nil
 local killAuraEnabled = false
 local killAuraRadius = 18
 local killAuraVisualDisc = true
-local killAuraTargetMode = "All" -- All, Sheriff, Innocents
+local killAuraTargetMode = "All"
 local killAllActive = false
 local killAllSpeed = 0.1
 local killSheriffActive = false
@@ -69,7 +65,6 @@ end)
 
 local function findMurderer()
     for _, i in ipairs(Players:GetPlayers()) do 
-        -- 🔥 Se añadió i:FindFirstChild("Backpack") para evitar que el script crashee
         if i:FindFirstChild("Backpack") and i.Backpack:FindFirstChild("Knife") then return i end
         if i.Character and i.Character:FindFirstChild("Knife") then return i end 
     end
@@ -135,11 +130,9 @@ local function stabTargetHRP(targetHRP)
 end
 
 local function getMap()
-    -- Prioridad: mapa de ronda con monedas/arma (nunca Lobby)
     local best = nil
     for _, o in ipairs(workspace:GetChildren()) do
         if o.Name == "Lobby" or o.Name == "Players" then
-            -- skip
         elseif o:IsA("Model") or o:IsA("Folder") then
             local hasCoins = o:FindFirstChild("CoinContainer") or o:FindFirstChild("CoinAreas")
             local hasGun = o:FindFirstChild("GunDrop")
@@ -153,7 +146,6 @@ local function getMap()
         end
     end
     if best then return best end
-    -- Último recurso: cualquier mapa con Spawns que no sea Lobby
     for _, o in ipairs(workspace:GetChildren()) do
         if o.Name ~= "Lobby" and o.Name ~= "Players" and o:FindFirstChild("Spawns") then
             if o:IsA("Model") or o:IsA("Folder") then
@@ -165,7 +157,6 @@ local function getMap()
 end
 
 local function findGunDrop()
-    -- Igual que el otro script: busca GunDrop en todo workspace
     for _, v in pairs(workspace:GetDescendants()) do
         if v.Name == "GunDrop" and v:IsA("BasePart") then
             return v
@@ -200,16 +191,14 @@ local function playerHasGun()
 end
 
 local function instantGrabGun()
-    -- Del otro script (mm2): TP al arma + firetouchinterest + volver
     if findMurderer() == player then return false end
     local gunDrop = findGunDrop()
-    local char = player.Character or LocalPlayer.Character
+    local char = player.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not gunDrop or not hrp then return false end
     if playerHasGun() then return true end
 
     local oldCFrame = hrp.CFrame
-    -- Posicionarse encima del arma (offset como en el otro script)
     hrp.CFrame = gunDrop.CFrame + Vector3.new(0, 1, 0)
     task.wait(0.03)
     pcall(function()
@@ -220,7 +209,6 @@ local function instantGrabGun()
     end)
     task.wait(0.05)
 
-    -- Si no la agarró, segundo intento más pegado
     if not playerHasGun() and findGunDrop() then
         gunDrop = findGunDrop()
         if gunDrop then
@@ -242,21 +230,16 @@ local function instantGrabGun()
         end
     end
 
-    -- Volver a la posición original (como el otro script)
     if hrp and hrp.Parent then
         hrp.CFrame = oldCFrame
     end
     return playerHasGun()
 end
 
--- Alias por compatibilidad
 local function grabGunDrop(stay)
     return instantGrabGun()
 end
 
--- ==========================================
--- OVERLAYS (Botones flotantes, ESP)
--- ==========================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "VortexXMM2_Overlays"
 screenGui.ResetOnSpawn = false
@@ -267,7 +250,6 @@ local espFolder = Instance.new("Folder")
 espFolder.Name = "FlexusESPFolder"
 espFolder.Parent = screenGui
 
--- 🔥 VARIABLES GLOBALES PARA EDICIÓN DE BOTONES
 _G.EditFloatingButtons = false
 _G.FloatingButtonsShape = "Square"
 _G.FloatingBtnSize = 42
@@ -298,7 +280,6 @@ local function makeDraggable(guiObject, objectToMove)
 end
 
 
--- FAB Vapor-style (dorado) + Lucide via getgenv (ahorra registers)
 do
 	local g = (getgenv and getgenv()) or _G
 	g.__VXFab = g.__VXFab or {}
@@ -513,42 +494,42 @@ do
         return WindUI:CreateWindow({
             Title = "FlexusHub [MM2]",
             Icon = "rbxassetid://78482030075403",
-            IconSize = 35,
+            IconSize = 32,
             IconThemed = true,
             Author = "Flexus-Team",
             Folder = "FlexusHub_MM2",
             ConfigName = "FlexusHub_MM2",
             Background = "rbxassetid://83511264088514",
-            BackgroundImageTransparency = 0.22,
-            Size = UDim2.fromOffset(520, 405),
-            MinSize = Vector2.new(440, 335),
-            MaxSize = Vector2.new(650, 500),
+            BackgroundImageTransparency = 0.42,
+            Size = UDim2.fromOffset(520, 410),
+            MinSize = Vector2.new(440, 340),
+            MaxSize = Vector2.new(680, 540),
             Resizable = true,
             HideSearchBar = true,
-            Transparent = false,
-            Acrylic = false,
-            SideBarWidth = 145,
-            ElementsRadius = 12,
-            ModernLayout = true,
+            Transparent = true,
+            Acrylic = true,
+            SideBarWidth = 142,
+            ElementsRadius = 16,
+            ModernLayout = false,
             ModernLayoutMergeElements = false,
             HidePanelBackground = false,
-            Theme = "Dark",
+            Theme = "Graphite",
+            Topbar = { Height = 42, ButtonsType = "Default" },
             OpenButton = {
                 Enabled = true,
-                Title = "FlexusHub [MM2]",
+                Title = "FlexusHub",
                 Icon = "rbxassetid://78482030075403",
                 OnlyMobile = false,
                 Draggable = true,
                 Scale = 0.82,
-                StrokeThickness = 1,
-                Color = ColorSequence.new(Color3.fromRGB(118, 118, 124), Color3.fromRGB(164, 164, 170)),
+                StrokeThickness = 2.5,
+                Color = ColorSequence.new(Color3.fromRGB(28, 28, 34), Color3.fromRGB(200, 200, 210)),
             },
         })
     end)
     if okWin and winOrErr then
         Window = winOrErr
     else
-        -- Fallback sin opciones extras por si el executor no soporta alguna key
         local ok2, win2 = pcall(function()
             return WindUI:CreateWindow({
                 Title = "FlexusHub [MM2]",
@@ -588,46 +569,67 @@ end)
 
 
 pcall(function()
-    WindUI:AddTheme({
-        Name = "Graphite",
-        Accent = Color3.fromRGB(200, 200, 205),
-        Background = Color3.fromRGB(8, 8, 10),
-        BackgroundTransparency = 0,
-        Outline = Color3.fromRGB(180, 180, 185),
-        Text = Color3.fromRGB(255, 255, 255),
-        Placeholder = Color3.fromRGB(190, 190, 200),
-        Button = Color3.fromRGB(55, 55, 60),
-        Icon = Color3.fromRGB(220, 220, 225),
-        Hover = Color3.fromRGB(255, 255, 255),
-        WindowBackground = Color3.fromRGB(10, 10, 12),
-        WindowShadow = Color3.fromRGB(160, 160, 165),
-        DialogBackground = Color3.fromRGB(18, 18, 22),
-        DialogBackgroundTransparency = 0,
-        DialogTitle = Color3.fromRGB(255, 255, 255),
-        DialogContent = Color3.fromRGB(235, 235, 240),
-        DialogIcon = Color3.fromRGB(220, 220, 225),
-        WindowTopbarButtonIcon = Color3.fromRGB(255, 255, 255),
-        WindowTopbarTitle = Color3.fromRGB(255, 255, 255),
-        WindowTopbarAuthor = Color3.fromRGB(210, 210, 220),
-        WindowTopbarIcon = Color3.fromRGB(220, 220, 225),
-        TabBackground = Color3.fromRGB(28, 28, 32),
+    local function addT(name, c)
+        local t = { Name = name }
+        for k, v in pairs(c) do t[k] = v end
+        WindUI:AddTheme(t)
+    end
+    addT("Graphite", {
+        Accent = Color3.fromRGB(245, 245, 250),
+        Outline = Color3.fromRGB(160, 160, 170),
+        Text = Color3.fromRGB(252, 252, 255),
+        Placeholder = Color3.fromRGB(130, 130, 140),
+        Background = Color3.fromRGB(10, 10, 14),
+        Button = Color3.fromRGB(36, 36, 44),
+        Icon = Color3.fromRGB(240, 240, 245),
+        Toggle = Color3.fromRGB(230, 230, 238),
+        Slider = Color3.fromRGB(210, 210, 220),
+        Checkbox = Color3.fromRGB(230, 230, 238),
+        Dialog = Color3.fromRGB(8, 8, 12),
+        Primary = Color3.fromRGB(245, 245, 250),
+        WindowBackground = Color3.fromRGB(10, 10, 14),
+        TabBackground = Color3.fromRGB(14, 14, 18),
         TabTitle = Color3.fromRGB(255, 255, 255),
-        TabIcon = Color3.fromRGB(200, 200, 205),
-        ElementBackground = Color3.fromRGB(24, 24, 30),
-        ElementTitle = Color3.fromRGB(255, 255, 255),
-        ElementDesc = Color3.fromRGB(200, 200, 210),
-        ElementIcon = Color3.fromRGB(200, 200, 205),
-        PopupBackground = Color3.fromRGB(18, 18, 22),
-        PopupBackgroundTransparency = 0,
-        PopupTitle = Color3.fromRGB(255, 255, 255),
-        PopupContent = Color3.fromRGB(230, 230, 235),
-        PopupIcon = Color3.fromRGB(200, 200, 205),
-        Toggle = Color3.fromRGB(200, 200, 205),
-        ToggleBar = Color3.fromRGB(40, 40, 50),
-        Checkbox = Color3.fromRGB(40, 40, 50),
-        CheckboxIcon = Color3.fromRGB(255, 255, 255),
-        Slider = Color3.fromRGB(200, 200, 205),
-        SliderThumb = Color3.fromRGB(255, 255, 255),
+        ElementTitle = Color3.fromRGB(245, 245, 250),
+        ElementDesc = Color3.fromRGB(150, 150, 160),
+    })
+    addT("Neon Blue", {
+        Accent = Color3.fromRGB(70, 180, 255),
+        Outline = Color3.fromRGB(60, 170, 255),
+        Text = Color3.fromRGB(230, 245, 255),
+        Placeholder = Color3.fromRGB(90, 140, 190),
+        Background = Color3.fromRGB(3, 10, 24),
+        Button = Color3.fromRGB(18, 60, 130),
+        Icon = Color3.fromRGB(120, 200, 255),
+        Toggle = Color3.fromRGB(50, 170, 255),
+        Slider = Color3.fromRGB(40, 150, 255),
+        Checkbox = Color3.fromRGB(50, 170, 255),
+        Dialog = Color3.fromRGB(4, 12, 28),
+        Primary = Color3.fromRGB(80, 190, 255),
+        WindowBackground = Color3.fromRGB(3, 10, 24),
+        TabBackground = Color3.fromRGB(6, 14, 32),
+        TabTitle = Color3.fromRGB(200, 240, 255),
+        ElementTitle = Color3.fromRGB(220, 245, 255),
+        ElementDesc = Color3.fromRGB(100, 150, 200),
+    })
+    addT("Golden", {
+        Accent = Color3.fromRGB(255, 200, 70),
+        Outline = Color3.fromRGB(220, 170, 50),
+        Text = Color3.fromRGB(255, 245, 220),
+        Placeholder = Color3.fromRGB(160, 130, 70),
+        Background = Color3.fromRGB(14, 10, 4),
+        Button = Color3.fromRGB(55, 38, 12),
+        Icon = Color3.fromRGB(255, 210, 90),
+        Toggle = Color3.fromRGB(255, 195, 60),
+        Slider = Color3.fromRGB(240, 180, 50),
+        Checkbox = Color3.fromRGB(255, 195, 60),
+        Dialog = Color3.fromRGB(18, 12, 4),
+        Primary = Color3.fromRGB(255, 205, 80),
+        WindowBackground = Color3.fromRGB(14, 10, 4),
+        TabBackground = Color3.fromRGB(18, 12, 5),
+        TabTitle = Color3.fromRGB(255, 240, 200),
+        ElementTitle = Color3.fromRGB(255, 245, 220),
+        ElementDesc = Color3.fromRGB(180, 140, 70),
     })
     WindUI:SetTheme("Graphite")
 end)
@@ -635,11 +637,7 @@ end)
 pcall(function() Window:SetToggleKey(Enum.KeyCode.RightAlt) end)
 pcall(function() Window:OnClose(function() end) end)
 
--- [REMOVED] Contador de usuarios Onyx
 
--- ==========================================
--- NOTIFICACIONES (WindUI)
--- ==========================================
 local function sendNotification(title, content, duration)
     if content == nil then
         content = title
@@ -664,27 +662,26 @@ local MainSection = Window:Section({ Title = "Funciones Principales", Opened = t
 local TrollSection = Window:Section({ Title = "Configs y Extra", Opened = true})
 
 local Tabs = {
-    Info = MainSection:Tab({ Title = "Information", Icon = "badge-info", ShowTabTitle = true, Border = true }),
-    Murderer = MainSection:Tab({ Title = "Murderer", Icon = "swords", ShowTabTitle = true, Border = true }),
-    Sheriff = MainSection:Tab({ Title = "Sheriff", Icon = "crosshair", ShowTabTitle = true, Border = true }),
-    Troll = TrollSection:Tab({ Title = "Troll", Icon = "ghost", ShowTabTitle = true, Border = true }),
-    AutoFarm = MainSection:Tab({ Title = "AutoFarm", Icon = "coins", ShowTabTitle = true, Border = true }),
-    ESP = MainSection:Tab({ Title = "ESP", Icon = "eye", ShowTabTitle = true, Border = true }),
-    Movimiento = MainSection:Tab({ Title = "Movement", Icon = "person-standing", ShowTabTitle = true, Border = true }),
-    Teleport = MainSection:Tab({ Title = "Teleport", Icon = "map-pin", ShowTabTitle = true, Border = true }),
-    Bubbles = MainSection:Tab({ Title = "Bubbles", Icon = "circle", ShowTabTitle = true, Border = true }),
-    Graficos = MainSection:Tab({ Title = "Graphics", Icon = "palette", ShowTabTitle = true, Border = true }),
-    Emotes = TrollSection:Tab({ Title = "Animaciones", Icon = "smile", ShowTabTitle = true, Border = true }),
-    Config = TrollSection:Tab({ Title = "Guardado", Icon = "save", ShowTabTitle = true, Border = true }),
-    Music = TrollSection:Tab({ Title = "Music", Icon = "music", ShowTabTitle = true, Border = true }),
-    Extra = TrollSection:Tab({ Title = "Extra", Icon = "package", ShowTabTitle = true, Border = true }),
+    Info = MainSection:Tab({ Title = "Information", Icon = "badge-info", ShowTabTitle = true, Border = false }),
+    Murderer = MainSection:Tab({ Title = "Murderer", Icon = "swords", ShowTabTitle = true, Border = false }),
+    Sheriff = MainSection:Tab({ Title = "Sheriff", Icon = "crosshair", ShowTabTitle = true, Border = false }),
+    Troll = TrollSection:Tab({ Title = "Troll", Icon = "ghost", ShowTabTitle = true, Border = false }),
+    AutoFarm = MainSection:Tab({ Title = "AutoFarm", Icon = "coins", ShowTabTitle = true, Border = false }),
+    ESP = MainSection:Tab({ Title = "ESP", Icon = "eye", ShowTabTitle = true, Border = false }),
+    Movimiento = MainSection:Tab({ Title = "Movement", Icon = "person-standing", ShowTabTitle = true, Border = false }),
+    Teleport = MainSection:Tab({ Title = "Teleport", Icon = "map-pin", ShowTabTitle = true, Border = false }),
+    Bubbles = MainSection:Tab({ Title = "Bubbles", Icon = "circle", ShowTabTitle = true, Border = false }),
+    Graficos = MainSection:Tab({ Title = "Graphics", Icon = "palette", ShowTabTitle = true, Border = false }),
+    Emotes = TrollSection:Tab({ Title = "Animaciones", Icon = "smile", ShowTabTitle = true, Border = false }),
+    Config = TrollSection:Tab({ Title = "Guardado", Icon = "save", ShowTabTitle = true, Border = false }),
+    Music = TrollSection:Tab({ Title = "Music", Icon = "music", ShowTabTitle = true, Border = false }),
+    Extra = TrollSection:Tab({ Title = "Extra", Icon = "package", ShowTabTitle = true, Border = false }),
 }
 
 pcall(function() Tabs.Info:Select() end)
 
 local UIElements = {}
 
--- 🕵️‍♂️ VIGILANTE DE ROL
 task.spawn(function()
     while task.wait(0.5) do
         if espEnabled then
@@ -874,40 +871,166 @@ Tabs.Info:Button({
 
 Tabs.Info:Divider({ Title = "Apariencia" })
 
-local function applyOpenButtonTheme(themeName)
-    local seq
-    if themeName == "Golden" then
-        seq = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 120, 20)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 200, 80)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 160, 40)),
-        })
-    elseif themeName == "Neon Blue" then
-        seq = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 80, 180)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 180, 255)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 140, 255)),
-        })
-    else
-        seq = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(118, 118, 124)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 200, 205)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(164, 164, 170)),
-        })
-    end
+local THEME_CHROME = {
+    Graphite = {
+        btn = ColorSequence.new(Color3.fromRGB(18, 18, 24), Color3.fromRGB(220, 220, 230)),
+        menuStroke = Color3.fromRGB(190, 190, 205),
+        innerStroke = Color3.fromRGB(70, 70, 82),
+        corner = 18, strokeThick = 2.4, btnStroke = 2.8,
+        title = Color3.fromRGB(255, 255, 255),
+        option = Color3.fromRGB(235, 235, 245),
+        muted = Color3.fromRGB(130, 130, 145),
+        accent = Color3.fromRGB(245, 245, 252),
+        bar = ColorSequence.new(Color3.fromRGB(40, 40, 50), Color3.fromRGB(200, 200, 215)),
+    },
+    ["Neon Blue"] = {
+        btn = ColorSequence.new(Color3.fromRGB(5, 30, 80), Color3.fromRGB(60, 190, 255)),
+        menuStroke = Color3.fromRGB(40, 170, 255),
+        innerStroke = Color3.fromRGB(15, 80, 170),
+        corner = 18, strokeThick = 2.5, btnStroke = 2.9,
+        title = Color3.fromRGB(200, 240, 255),
+        option = Color3.fromRGB(220, 245, 255),
+        muted = Color3.fromRGB(90, 140, 190),
+        accent = Color3.fromRGB(70, 195, 255),
+        bar = ColorSequence.new(Color3.fromRGB(10, 50, 120), Color3.fromRGB(60, 190, 255)),
+    },
+    Golden = {
+        btn = ColorSequence.new(Color3.fromRGB(50, 32, 6), Color3.fromRGB(255, 210, 80)),
+        menuStroke = Color3.fromRGB(235, 180, 50),
+        innerStroke = Color3.fromRGB(120, 85, 20),
+        corner = 18, strokeThick = 2.5, btnStroke = 2.9,
+        title = Color3.fromRGB(255, 240, 200),
+        option = Color3.fromRGB(255, 245, 220),
+        muted = Color3.fromRGB(170, 130, 60),
+        accent = Color3.fromRGB(255, 205, 80),
+        bar = ColorSequence.new(Color3.fromRGB(80, 50, 10), Color3.fromRGB(255, 210, 80)),
+    },
+}
+
+local function applyThemeChrome(themeName)
+    themeName = tostring(themeName or currentThemeName or "Graphite")
+    local chrome = THEME_CHROME[themeName] or THEME_CHROME.Graphite
+    currentThemeName = themeName
     pcall(function()
         Window:EditOpenButton({
-            Title = "FlexusHub [MM2]",
+            Title = "FlexusHub",
             Icon = "rbxassetid://78482030075403",
-            CornerRadius = UDim.new(0, 12),
-            StrokeThickness = 1,
-            Color = seq,
+            Color = chrome.btn,
+            StrokeThickness = chrome.btnStroke or 2.6,
             OnlyMobile = false,
             Enabled = true,
             Draggable = true,
         })
     end)
+    pcall(function()
+        local candidates = {}
+        if Window.UI then table.insert(candidates, Window.UI) end
+        if Window.Frame then table.insert(candidates, Window.Frame) end
+        if type(Window.GetFrame) == "function" then
+            local f = Window:GetFrame()
+            if f then table.insert(candidates, f) end
+        end
+        local host
+        pcall(function() if gethui then host = gethui() end end)
+        host = host or game:GetService("CoreGui")
+        for _, gui in ipairs(host:GetChildren()) do
+            if gui:IsA("ScreenGui") then
+                for _, d in ipairs(gui:GetDescendants()) do
+                    if d:IsA("Frame") then
+                        local n = string.lower(d.Name)
+                        if (n:find("window") or n:find("main") or n:find("root")) and d.AbsoluteSize.X > 260 and d.AbsoluteSize.Y > 180 then
+                            table.insert(candidates, d)
+                        end
+                    end
+                end
+            end
+        end
+        local roots = {}
+        for _, frame in ipairs(candidates) do
+            if typeof(frame) == "Instance" and frame:IsA("GuiObject") then
+                roots[#roots + 1] = frame
+                local corner = frame:FindFirstChild("FlexusChromeCorner")
+                if not corner then
+                    corner = Instance.new("UICorner")
+                    corner.Name = "FlexusChromeCorner"
+                    corner.Parent = frame
+                end
+                corner.CornerRadius = UDim.new(0, chrome.corner or 18)
+                local st = frame:FindFirstChild("FlexusChromeStroke")
+                if not st then
+                    st = Instance.new("UIStroke")
+                    st.Name = "FlexusChromeStroke"
+                    st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    st.LineJoinMode = Enum.LineJoinMode.Round
+                    st.Parent = frame
+                end
+                st.Thickness = chrome.strokeThick or 2.4
+                st.Color = chrome.menuStroke
+                st.Transparency = 0.02
+                local st2 = frame:FindFirstChild("FlexusChromeInner")
+                if not st2 then
+                    st2 = Instance.new("UIStroke")
+                    st2.Name = "FlexusChromeInner"
+                    st2.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    st2.Parent = frame
+                end
+                st2.Thickness = 1.1
+                st2.Color = chrome.innerStroke
+                st2.Transparency = 0.4
+                local bar = frame:FindFirstChild("FlexusAccentBar")
+                if not bar then
+                    bar = Instance.new("Frame")
+                    bar.Name = "FlexusAccentBar"
+                    bar.BorderSizePixel = 0
+                    bar.Size = UDim2.new(1, 0, 0, 3)
+                    bar.ZIndex = 50
+                    bar.Parent = frame
+                    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 2)
+                    local g = Instance.new("UIGradient")
+                    g.Name = "FlexusBarGrad"
+                    g.Parent = bar
+                end
+                bar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                local grad = bar:FindFirstChild("FlexusBarGrad")
+                if grad then grad.Color = chrome.bar end
+                if #roots >= 3 then break end
+            end
+        end
+        for _, root in ipairs(roots) do
+            for _, d in ipairs(root:GetDescendants()) do
+                if d:IsA("TextLabel") or d:IsA("TextButton") then
+                    local sz = d.TextSize or 14
+                    if sz >= 16 or string.lower(tostring(d.Text)):find("flexus") then
+                        d.TextColor3 = chrome.title
+                    elseif sz <= 12 then
+                        d.TextColor3 = chrome.muted
+                    else
+                        d.TextColor3 = chrome.option
+                    end
+                elseif d:IsA("ImageLabel") or d:IsA("ImageButton") then
+                    pcall(function()
+                        if d.AbsoluteSize.X <= 28 then d.ImageColor3 = chrome.accent end
+                    end)
+                end
+            end
+        end
+        if #roots == 0 then
+            task.defer(function()
+                task.wait(0.35)
+                pcall(function() applyThemeChrome(themeName) end)
+            end)
+        end
+    end)
 end
+
+local function applyOpenButtonTheme(themeName)
+    applyThemeChrome(themeName)
+end
+
+task.defer(function()
+    task.wait(0.3)
+    applyThemeChrome("Graphite")
+end)
 
 Tabs.Info:Dropdown({
     Title = "Theme del menu",
@@ -930,8 +1053,16 @@ Tabs.Info:Dropdown({
             end
         end)
         pcall(function() updateDiscordBannerImage(themeName) end)
-        applyOpenButtonTheme(themeName)
-        sendNotification("Theme", "Theme aplicado: " .. themeName, 2)
+        applyThemeChrome(themeName)
+        task.defer(function()
+            task.wait(0.15)
+            pcall(function() applyThemeChrome(themeName) end)
+        end)
+        pcall(function()
+            if WindUI and WindUI.Notify then
+                WindUI:Notify({ Title = "FlexusHub", Content = "Theme: " .. themeName, Duration = 2 })
+            end
+        end)
     end
 })
 
@@ -1073,7 +1204,6 @@ UIElements.ToggleFPS = Tabs.Info:Toggle({
         end
 
         if state then
-            -- 1. APAGAR ILUMINACIÓN
             origGlobalShadows = Lighting.GlobalShadows
             origFogEnd = Lighting.FogEnd
             origShadowSoftness = Lighting.ShadowSoftness
@@ -1082,7 +1212,6 @@ UIElements.ToggleFPS = Tabs.Info:Toggle({
             Lighting.FogEnd = 9e9
             Lighting.ShadowSoftness = 0
             
-            -- 2. APAGAR TERRENO
             if Terrain then
                 pcall(function()
                     if not Terrain:GetAttribute("OrigWaveSize") then
@@ -1094,14 +1223,11 @@ UIElements.ToggleFPS = Tabs.Info:Toggle({
                 end)
             end
             
-            -- 3. MODO PLASTILINA SEGURO (Anti-Crasheo)
             local function applyLowGraphics(v)
-                -- 🔥 FILTRO ULTRA RÁPIDO:
                 if not v:IsA("BasePart") and not v:IsA("Decal") and not v:IsA("Texture") and not v:IsA("SpecialMesh") and not v:IsA("Light") and not v:IsA("PostEffect") and not v:IsA("SurfaceAppearance") and not v:IsA("Clothing") then return end
 
                 pcall(function()
                     if v:IsA("ScreenGui") then return end
-                    -- Protegemos a los jugadores
                     if v.Parent and v.Parent:FindFirstChild("Humanoid") then return end
 
                     if v:IsA("BasePart") and not v:IsA("Terrain") then 
@@ -1132,7 +1258,6 @@ UIElements.ToggleFPS = Tabs.Info:Toggle({
                 end)
             end
             
-            -- Aplicamos progresivamente para no trabar el juego
             task.spawn(function()
                 local count = 0
                 for _, v in pairs(workspace:GetDescendants()) do 
@@ -1149,7 +1274,6 @@ UIElements.ToggleFPS = Tabs.Info:Toggle({
             end
             sendNotification("Aplicando FPS Boost...")
         else
-            -- RESTAURAR ABSOLUTAMENTE TODO 
             Lighting.GlobalShadows = origGlobalShadows
             Lighting.FogEnd = origFogEnd
             Lighting.ShadowSoftness = origShadowSoftness
@@ -1222,25 +1346,22 @@ local activeESPs = {}
 local espNamesEnabled = false
 local espDistanceEnabled = false
 local espSkeletonEnabled = false 
-local espLinesEnabled = false -- ✨ NUEVA VARIABLE PARA LÍNEAS
+local espLinesEnabled = false
 
 cleanESP = function(targetPlayer)
     if activeESPs[targetPlayer] then
         if activeESPs[targetPlayer].Highlight then activeESPs[targetPlayer].Highlight:Destroy() end
         if activeESPs[targetPlayer].Billboard then activeESPs[targetPlayer].Billboard:Destroy() end
-        if activeESPs[targetPlayer].Skeleton then activeESPs[targetPlayer].Skeleton:Destroy() end -- NUEVO
+        if activeESPs[targetPlayer].Skeleton then activeESPs[targetPlayer].Skeleton:Destroy() end
         activeESPs[targetPlayer] = nil
     end
 end
 
 
-task.wait() -- 🔥 AÑADE ESTO
+task.wait()
 
--- ==========================================
 
-do -- Graphics scope
--- PESTAÑA GRÁFICOS (SHADERS Y OPTIMIZACIÓN)
--- ==========================================
+do
 Tabs.Graficos:Section({Title = "Modos Visuales (Elige solo uno)"})
 
 local shaderEffects = {}
@@ -1255,7 +1376,6 @@ local shaderAjustes = {
     PinkRosa = 0.8, PinkMorado = 0.7, PinkSaturacion = 0.4, PinkNeon = 0.3
 }
 
--- 🔥 FUNCIÓN MAESTRA PARA ANIQUILAR NUBES Y ATMÓSFERA (OPTIMIZADA ANTI-FREEZE) 🔥
 local function ToggleNubesYAtmo(apagar, tag)
     local Lighting = game:GetService("Lighting")
     for _, obj in ipairs(Lighting:GetChildren()) do
@@ -1320,9 +1440,6 @@ local function UpdatePinkHourVibe()
     Lighting.ExposureCompensation = 0.1 - (0.25 * morado)
 end
 
--- ==========================================
--- SHADERS TOKYOWAMI
--- ==========================================
 UIElements.TogTokyowami = Tabs.Graficos:Toggle({
     Flag = "Shaders_Tokyowami",
     Title = "Shaders Tokyowami", Desc = "Aplica shaders originales.",
@@ -1347,9 +1464,6 @@ UIElements.TogTokyowami = Tabs.Graficos:Toggle({
     end
 })
 
--- ==========================================
--- MODO NOCHE
--- ==========================================
 UIElements.TogNight = Tabs.Graficos:Toggle({
     Flag = "Modo_Noche",
     Title = "Modo Noche", Desc = "Modo noche ajustable.",
@@ -1385,9 +1499,6 @@ UIElements.TogNight = Tabs.Graficos:Toggle({
     end
 })
 
--- ==========================================
--- PINK HOUR (VAPORWAVE)
--- ==========================================
 UIElements.TogPink = Tabs.Graficos:Toggle({
     Flag = "Pink_Hour",
     Title = "Pink Hour", Desc = "Estilo Synthwave. Cielo y ambiente ajustable.",
@@ -1438,7 +1549,6 @@ Tabs.Graficos:Slider({ Flag = "Resplandor_2",
     Title = "Resplandor", Step = 0.05, Value = {Min = 0.0, Max = 1.0, Default = 0}, Callback = function(v) shaderAjustes.PinkNeon = v if pinkActivo then for _, effect in ipairs(pinkEffects) do if effect:IsA("BloomEffect") then effect.Intensity = v end end end end })
 
 
--- Variables de colores por defecto
 local espColors = {
     Innocent = Color3.fromRGB(0, 255, 0),
     Sheriff = Color3.fromRGB(0, 150, 255),
@@ -1535,10 +1645,7 @@ local originalData = {}
 local textScannerLoop = nil
 local rainbowLoop = nil
 
--- ==========================================
--- SISTEMA DE NOMBRES (OPTIMIZADO CON EVENTOS)
--- ==========================================
-local textConnections = {} -- Almacenará los eventos para limpiarlos sin lag
+local textConnections = {}
 
 local function safeReplace(str, find, replace) 
     local safeFind = find:gsub("[%-%^%$%(%)%%%.%[%]%*%+%?]", "%%%1") 
@@ -1566,14 +1673,11 @@ local function processText(v, myName, myDisp)
     end
 end
 
--- 🚀 NUEVA FUNCIÓN: Solo se engancha a los textos necesarios
 local function setupTextElement(v, myName, myDisp)
-    -- 🔥 IGNORAMOS EL HUB PARA QUE LOS BOTONES NO SE CONGELEN
     local parentGui = v:FindFirstAncestorWhichIsA("ScreenGui")
     if parentGui and string.find(parentGui.Name, "WindUI") then return end
 
     if v:IsA("TextLabel") or v:IsA("TextBox") or v:IsA("TextButton") then
-        -- 🔥 ESTA ES LA PROTECCIÓN QUE FALTA
         if v:GetAttribute("FHInfectado") then return end
         v:SetAttribute("FHInfectado", true)
 
@@ -1613,7 +1717,7 @@ local function updateSystem()
 
     if stateActive then
         if not textScannerLoop then
-            textScannerLoop = {} -- Lo usamos como bandera para saber que está encendido
+            textScannerLoop = {}
             
             local function scanInitial()
                 if player.Character then
@@ -1629,7 +1733,6 @@ local function updateSystem()
             
             scanInitial()
             
-            -- 🚀 OPTIMIZACIÓN: Solo escuchar cuando el juego agrega elementos nuevos
             local pGui = player:FindFirstChild("PlayerGui")
             if pGui then
                 textScannerLoop.GuiConn = pGui.DescendantAdded:Connect(function(v) setupTextElement(v, myName, myDisp) end)
@@ -1649,7 +1752,6 @@ local function updateSystem()
             for v, _ in pairs(originalData) do if v.Parent then processText(v, myName, myDisp) end end
         end
         
-        -- El Rainbow se queda en RenderStepped porque es ultra ligero al ser solo color
         if rainbowEnabled and not rainbowLoop then
             rainbowLoop = RunService.RenderStepped:Connect(function()
                 local rColor = Color3.fromHSV(tick() % 4 / 4, 1, 1)
@@ -1666,7 +1768,6 @@ local function updateSystem()
             for v, data in pairs(originalData) do if v.Parent then v.TextColor3 = data.Color end end
         end
     else
-        -- 🛑 APAGAR TODO LIMPIAMENTE
         if textScannerLoop then 
             if textScannerLoop.GuiConn then textScannerLoop.GuiConn:Disconnect() end
             if textScannerLoop.CharAddedConn then textScannerLoop.CharAddedConn:Disconnect() end
@@ -1703,25 +1804,19 @@ UIElements.ToggleRbName = Tabs.ESP:Toggle({ Flag = "Efecto_Nombre_Rainbow",
     Title = "Efecto Nombre Rainbow", Value = false, Callback = function(state) rainbowEnabled = state; updateSystem() end })
 
 
--- 🔥 AGREGA ESTA LÍNEA AQUÍ (Ajusta el número a lo que necesites)
 local MAX_ESP_DISTANCE = 1500
 
--- 🔥 DECLARAMOS LA CACHÉ AFUERA PARA QUE TODO EL SCRIPT LA VEA
 local globalMurderer = nil
 local globalSheriff = nil
 
 local activeGunHighlight = nil
 local activeGunBillboard = nil
 
--- ==========================================
--- 🚀 HILO MAESTRO DE OPTIMIZACIÓN (CERO LAG)
--- ==========================================
 RunService.Heartbeat:Connect(function(deltaTime)
     local myChar = player.Character
     local myHrp = myChar and ffc(myChar, "HumanoidRootPart")
     if not myHrp then return end
 
-    -- 1. AUTO STAB OPTIMIZADO (Sin lag, controlado por deltaTime)
     if autoStabEnabled then
         mState.stabAct = true
         mState.tStab = mState.tStab + deltaTime
@@ -1754,7 +1849,6 @@ RunService.Heartbeat:Connect(function(deltaTime)
         mState.tStab = 0
     end
 
-    -- 2. KILL AURA + VISUAL DISC
     if killAuraEnabled then
         mState.auraAct = true
         if killAuraVisualDisc and myHrp then
@@ -1829,7 +1923,6 @@ RunService.Heartbeat:Connect(function(deltaTime)
         end
     end
 
-    -- 3. ESP DE JUGADORES Y ARMA TIRADA (0.2s)
     if espEnabled or gunDropESP then
         mState.espAct = true
         mState.tESP = mState.tESP + deltaTime
@@ -1840,7 +1933,6 @@ RunService.Heartbeat:Connect(function(deltaTime)
             globalSheriff = findSheriff()
             local currentMap = getMap()
 
-            -- Procesar ESP de Jugadores
             if espEnabled then
                 for i = 1, #listaJugadores do
                     local p = listaJugadores[i]
@@ -1929,7 +2021,6 @@ RunService.Heartbeat:Connect(function(deltaTime)
                 for i = 1, #listaJugadores do cleanESP(listaJugadores[i]) end 
             end
 
-            -- Procesar ESP Arma Tirada
             if gunDropESP or notifyGunDropEnabled then
                 local gunDrop = findGunDrop()
                 local gunPart = nil
@@ -2022,10 +2113,6 @@ RunService.Heartbeat:Connect(function(deltaTime)
     end
 end)
 
--- ==========================================
--- 2. SISTEMA DRAWING 2D (Esqueleto y Líneas Tracers) OPTIMIZADO
--- ==========================================
--- 🔥 VARIABLES QUE FALTABAN
 local skeletonLines = {}
 local tracerLines = {}
 local skeletonJoints = {
@@ -2037,17 +2124,15 @@ local skeletonJoints = {
     {"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}
 }
 
-local MAX_RENDER_DISTANCE = 250 -- Límite de studs para dibujar líneas
+local MAX_RENDER_DISTANCE = 250
 
 RunService.RenderStepped:Connect(function()
-    -- 🔥 JALAMOS LA CACHÉ GLOBAL
     local murderer = globalMurderer
     local sheriff = globalSheriff
     local screenSize = camera.ViewportSize
 
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= player then
-            -- Crear líneas si no existen
             if not skeletonLines[p] then
                 skeletonLines[p] = {}
                 for i = 1, #skeletonJoints do
@@ -2067,15 +2152,11 @@ RunService.RenderStepped:Connect(function()
             local isAlive = hrp and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0
             
             if isAlive and (espSkeletonEnabled or espLinesEnabled) then
-                -- 🚀 OPTIMIZACIÓN 1: Solo calcular la HRP primero
                 local hrpPos, onScreen = camera:WorldToViewportPoint(hrp.Position)
                 local dist = (camera.CFrame.Position - hrp.Position).Magnitude
                 
-                -- 🚀 OPTIMIZACIÓN 2: Si no está en pantalla o está muy lejos, apagar todo y saltar matemáticas
                 if onScreen and dist <= MAX_RENDER_DISTANCE then
                     
-                    -- 🔥 FIX DE COLORES AQUÍ WE:
-                    -- Ahora usa tu tabla de espColors en lugar de los colores fijos
                     local roleColor = espColors.Innocent 
                     if p == murderer then 
                         roleColor = espColors.Murderer 
@@ -2117,7 +2198,6 @@ RunService.RenderStepped:Connect(function()
                         for _, line in ipairs(skeletonLines[p]) do line.Visible = false end
                     end
                 else
-                    -- Apagar si está fuera de cámara
                     for _, line in ipairs(skeletonLines[p]) do line.Visible = false end
                     tracerLines[p].Visible = false
                 end
@@ -2129,7 +2209,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- 🔥 IMPORTANTE: Limpiador de basura cuando los jugadores se salen
 Players.PlayerRemoving:Connect(function(p) 
     cleanESP(p) 
     if skeletonLines[p] then
@@ -2148,7 +2227,7 @@ task.wait()
 
 Tabs.Sheriff:Section({ Title = "Aimbot Predictivo" })
 
-local showCrosshairEnabled = true -- Que se vea por defecto
+local showCrosshairEnabled = true
 
 UIElements.ToggleMira = Tabs.Sheriff:Toggle({
     Flag = "Mostrar_Mira_del_Aimbot",
@@ -2160,9 +2239,6 @@ UIElements.ToggleMira = Tabs.Sheriff:Toggle({
     end
 })
 
--- ==========================================
--- 🔫 AUTOSHOOT PREDICTIVO
--- ==========================================
 UIElements.ToggleAutoShoot = Tabs.Sheriff:Toggle({ 
     Flag = "AutoShoot_Predictivo",
     Title = "AutoShoot Predictivo", 
@@ -2171,7 +2247,6 @@ UIElements.ToggleAutoShoot = Tabs.Sheriff:Toggle({
     Callback = function(state)
         if getgenv().NathConfig then getgenv().NathConfig.AutoShoot = state end
         
-        -- Solo mandamos la notificación de "desactivado por AutoShoot" si realmente estaba prendido el Aimlock
         if state and aimlockConCandadoHabilitado then
             pcall(function() UIElements.ToggleNativeAimlock:Set(false) end)
             sendNotification("Aimlock desactivado por AutoShoot.")
@@ -2181,13 +2256,8 @@ UIElements.ToggleAutoShoot = Tabs.Sheriff:Toggle({
     end
 })
 
--- ==========================================
--- 🎯 BOTONES FLOTANTES DE DISPARO (IA)
--- ==========================================
--- Creamos el botón (SIN TEXTO VISIBLE)
 local aiFloatingShoot, getShootClick, shootStroke = createFloatingBtn("", UDim2.new(1, -10, 0.5, -115), "BtnShootIA")
 
--- ✨ ICONO GIRATORIO INTELIGENTE (GRANDE Y EN MEDIO) ✨
 local shootIcon = Instance.new("ImageLabel")
 shootIcon.Size = UDim2.new(0, 32, 0, 32) 
 shootIcon.Position = UDim2.new(0.5, 0, 0.5, 0) 
@@ -2198,11 +2268,9 @@ shootIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
 shootIcon.ZIndex = 51
 shootIcon.Parent = aiFloatingShoot
 
--- Animación de giro infinita
 local spinInfo = TweenInfo.new(2.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
 game:GetService("TweenService"):Create(shootIcon, spinInfo, {Rotation = 360}):Play()
 
--- Lógica del disparo
 aiFloatingShoot:FindFirstChild("Hit").MouseButton1Click:Connect(function()
     if not getShootClick() then return end
     if getgenv().DispararEventoDirecto then getgenv().DispararEventoDirecto(true) end
@@ -2285,15 +2353,12 @@ Tabs.Sheriff:Dropdown({
     Values = {"Dot", "Cross", "Ring"},
     Value = "Dot",
     Callback = function(Value)
-        if Value == "Dot" then _G.OnyxCrosshairType = 1
-        elseif Value == "Cross" then _G.OnyxCrosshairType = 2
-        elseif Value == "Ring" then _G.OnyxCrosshairType = 3 end
+        if Value == "Dot" then _G.FlexusCrosshairType = 1
+        elseif Value == "Cross" then _G.FlexusCrosshairType = 2
+        elseif Value == "Ring" then _G.FlexusCrosshairType = 3 end
     end
 })
 
--- ==========================================
--- 🔒 AIMLOCK NATIVO AL MURDERER (CANDADO)
--- ==========================================
 local aimlockActiveLoop = false
 local aimlockConCandadoHabilitado = false
 
@@ -2305,7 +2370,6 @@ UIElements.ToggleNativeAimlock = Tabs.Sheriff:Toggle({
     Callback = function(state)
         aimlockConCandadoHabilitado = state
         
-        -- Solo apagamos el AutoShoot y avisamos si realmente estaba prendido
         if state and getgenv().NathConfig and getgenv().NathConfig.AutoShoot then
             pcall(function() UIElements.ToggleAutoShoot:Set(false) end)
             sendNotification("AutoShoot desactivado por Aimlock.")
@@ -2313,7 +2377,6 @@ UIElements.ToggleNativeAimlock = Tabs.Sheriff:Toggle({
             sendNotification(state and "Aimlock: ON" or "Aimlock: OFF")
         end
 
-        -- Apagar de emergencia
         if not state and aimlockActiveLoop then
             aimlockActiveLoop = false
             pcall(function() RunService:UnbindFromRenderStep("AstraAimlockLoop") end)
@@ -2322,39 +2385,30 @@ UIElements.ToggleNativeAimlock = Tabs.Sheriff:Toggle({
 })
 
 UserInputService:GetPropertyChangedSignal("MouseBehavior"):Connect(function()
-    -- Si el VIP no activó el Aimlock en el menú, ignoramos todo
     if not aimlockConCandadoHabilitado then return end
 
     if UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter then
         if not aimlockActiveLoop then
             aimlockActiveLoop = true
             
-            -- Usamos prioridad alta para tener la última orden sobre la cámara
             RunService:BindToRenderStep("AstraAimlockLoop", Enum.RenderPriority.Camera.Value + 2, function()
                 local myChar = player.Character
                 local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                 
-                -- 1. Validar que estemos vivos y renderizados
                 if not myHrp or not myChar:FindFirstChild("Humanoid") or myChar.Humanoid.Health <= 0 then return end
                 
-                -- 2. Validar que tengamos un arma (estamos en partida)
                 local hasGun = myChar:FindFirstChild("Gun") or (player.Backpack and player.Backpack:FindFirstChild("Gun"))
                 if not hasGun then return end
                 
-                -- 3. Buscar al Murderer
                 local targetMurder = findMurderer()
                 if targetMurder and targetMurder.Character and targetMurder.Character:FindFirstChild("HumanoidRootPart") then
                     
-                    -- 🔥 FIX: Candado absoluto. 
-                    -- Quitamos el Lerp y forzamos la cámara a mirar al Murderer al instante.
-                    -- Esto anula por completo el movimiento manual del mouse.
                     local targetPos = targetMurder.Character.HumanoidRootPart.Position
                     camera.CFrame = CFrame.new(camera.CFrame.Position, targetPos)
                 end
             end)
         end
     else
-        -- Soltamos la cámara limpiamente al quitar el shiftlock
         if aimlockActiveLoop then
             aimlockActiveLoop = false
             pcall(function() RunService:UnbindFromRenderStep("AstraAimlockLoop") end)
@@ -2365,9 +2419,6 @@ end)
 
 task.wait()
 
--- ==========================================
--- MURDER / COMBAT TAB
--- ==========================================
 Tabs.Murderer:Section({ Title = "Aura de Kill" })
 
 UIElements.ToggleAura = Tabs.Murderer:Toggle({
@@ -2499,14 +2550,12 @@ Tabs.Murderer:Button({
     end
 })
 
--- Floating Kill All bubble
 killAllFloatingBtn, getKillAllClick = createFloatingBtn("Kill All", UDim2.new(1, -10, 0.5, -23), "BtnKillAll")
 killAllFloatingBtn:FindFirstChild("Hit").MouseButton1Click:Connect(function()
     if not getKillAllClick() then return end
     task.spawn(executeKillAllOnce)
 end)
 
--- Bubble manual Get Gun
 getGunFloatingBtn, getGetGunClick = createFloatingBtn("Get Gun", UDim2.new(1, -10, 0.5, 23), "BtnGetGun")
 getGunFloatingBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
 do
@@ -2535,7 +2584,6 @@ end)
 do
 Tabs.AutoFarm:Section({ Title = "Auto Farm de Monedas" })
 
--- Variables AutoFarm (igual que el otro script)
 local coinAutofarmEnabled = false
 local candyAutofarmEnabled = false
 local processedItemsTable = {}
@@ -2709,10 +2757,9 @@ RunService.Stepped:Connect(function()
 end)
 
 end
-task.wait() -- 🔥 AÑADE ESTO
+task.wait()
 Tabs.Teleport:Section({ Title = "Teletransporte" })
 
--- Helpers de TP (como el otro script: LobbySpawn / MapSpawn)
 local function getSpawnPart(name)
     local part = workspace:FindFirstChild(name, true)
     return part
@@ -2726,15 +2773,12 @@ local function teleportToLobby()
         return
     end
 
-    -- CFrame fijo del spawn del lobby (fallback seguro)
     local LOBBY_CF = CFrame.new(14.3513269, 502.020172, -13.2513723, 1, 0, 0, 0, 1, 0, 0, 0, 1)
 
     local lobbySpawn = nil
 
-    -- 1) LobbySpawn
     lobbySpawn = getSpawnPart("LobbySpawn")
 
-    -- 2) Nombre "Spawn" dentro de Lobby
     if not lobbySpawn then
         local lobby = workspace:FindFirstChild("Lobby")
         if lobby then
@@ -2750,7 +2794,6 @@ local function teleportToLobby()
         end
     end
 
-    -- 3) Buscar cualquier Spawn / LobbySpawn / SpawnLocation en workspace relacionado a lobby
     if not lobbySpawn then
         for _, v in ipairs(workspace:GetDescendants()) do
             if v.Name == "LobbySpawn" or (v.Name == "Spawn" and v:IsA("BasePart")) then
@@ -2793,7 +2836,6 @@ local function teleportToLobby()
         end
     end
 
-    -- 4) Fallback: CFrame fijo del lobby
     hrp.CFrame = LOBBY_CF + Vector3.new(0, 3, 0)
     sendNotification("Teletransporte al Lobby.")
 end
@@ -2806,10 +2848,8 @@ local function teleportToMap()
         return
     end
 
-    -- 1) Parte MapSpawn (como el otro script) — NO usar Lobby
     local mapSpawn = getSpawnPart("MapSpawn")
 
-    -- 2) Fallback: spawns del mapa de ronda (getMap), nunca Lobby
     if not mapSpawn then
         local map = getMap()
         if map and map:FindFirstChild("Spawns") then
@@ -2821,7 +2861,6 @@ local function teleportToMap()
         end
     end
 
-    -- 3) Fallback extra: buscar carpeta/mapa con CoinContainer + Spawns
     if not mapSpawn then
         for _, o in ipairs(workspace:GetChildren()) do
             if o.Name ~= "Lobby" and o.Name ~= "Players" and o:FindFirstChild("Spawns") then
@@ -2887,7 +2926,7 @@ task.spawn(function()
     while true do
         if autoGetDroppedGun then
             pcall(function()
-                local char = player.Character or LocalPlayer.Character
+                local char = player.Character
                 local hum = char and char:FindFirstChildOfClass("Humanoid")
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if hum and hum.Health > 0 and hrp then
@@ -2904,7 +2943,6 @@ task.spawn(function()
     end
 end)
 
--- Botón manual también en Teleport
 Tabs.Teleport:Button({
     Title = "Agarrar Arma Ahora",
     Desc = "Teletransporte manual a la pistola caída.",
@@ -2938,23 +2976,18 @@ Tabs.Teleport:Button({ Title = "Ir al Jugador", Callback = function()
     end
 end})
 
-task.wait() -- 🔥 AÑADE ESTO
+task.wait()
 Tabs.Movimiento:Section({ Title = "Vuelo, Noclip y Velocidad" })
--- ==========================================
--- 🕊️ FIX: FLY (Persistente)
--- ==========================================
 local flying = false
 local flySpeed = 50
 local bg, bv
 
--- Función maestra para inyectar físicas
 local function inyectarVuelo(char)
     if not char then return end
     local hrp = char:WaitForChild("HumanoidRootPart", 3)
     local hum = char:WaitForChild("Humanoid", 3)
     
     if hrp and hum and flying then
-        -- Limpiamos basuras viejas por si acaso
         if bg then bg:Destroy() end
         if bv then bv:Destroy() end
         
@@ -3025,7 +3058,6 @@ RunService.RenderStepped:Connect(function()
         end)
     end
 
-    -- Recrear movers si se perdieron (respawn / mobile)
     if not bv or bv.Parent ~= hrp or not bg or bg.Parent ~= hrp then
         pcall(function()
             if bv then bv:Destroy() end
@@ -3062,13 +3094,11 @@ RunService.RenderStepped:Connect(function()
             end
         end)
     end
-    -- Fallback movil: Humanoid.MoveDirection
     if moveDir.Magnitude < 0.05 and hum and hum.MoveDirection.Magnitude > 0.05 then
         local md = hum.MoveDirection
         local look = cam.CFrame.LookVector
         moveDir = Vector3.new(md.X, look.Y * md.Magnitude * 0.9, md.Z)
     end
-    -- Teclado
     if moveDir.Magnitude < 0.05 and not UserInputService:GetFocusedTextBox() then
         local look, right = cam.CFrame.LookVector, cam.CFrame.RightVector
         local k = Vector3.zero
@@ -3102,9 +3132,6 @@ UIElements.ToggleNoclip = Tabs.Movimiento:Toggle({ Flag = "Noclip",
     else if noclipConnection then noclipConnection:Disconnect(); noclipConnection = nil end end
 end})
 
--- ==========================================
--- 🏃‍♂️ FIX: WALK SPEED & SPEED GLITCH
--- ==========================================
 local customWalkSpeed = 25
 local walkSpeedEnabled = false
 local walkSpeedConnection = nil
@@ -3121,7 +3148,6 @@ UIElements.ToggleWalkSpeed = Tabs.Movimiento:Toggle({
         walkSpeedEnabled = state
         
         if state then
-            -- Si activas el permanente, apagamos el Speed Glitch para no chocar
             if speedGlitchEnabled and UIElements.ToggleSpeedGlitch then
                 pcall(function() UIElements.ToggleSpeedGlitch:Set(false) end)
             end
@@ -3153,25 +3179,21 @@ UIElements.ToggleSpeedGlitch = Tabs.Movimiento:Toggle({
         speedGlitchEnabled = state
         
         if state then
-            -- Si activas el Glitch, apagamos el caminar rápido permanente
             if walkSpeedEnabled and UIElements.ToggleWalkSpeed then
                 pcall(function() UIElements.ToggleWalkSpeed:Set(false) end)
             end
             
-            -- 🔥 FIX MÓVIL: Lee el microsegundo exacto en que tu dedo toca el botón de salto
             if not jumpRequestConnection then
                 jumpRequestConnection = UserInputService.JumpRequest:Connect(function()
                     if speedGlitchEnabled and player.Character then
                         local hum = player.Character:FindFirstChild("Humanoid")
                         if hum then
-                            -- Inyecta la velocidad justo ANTES de despegar
                             hum.WalkSpeed = customWalkSpeed
                         end
                     end
                 end)
             end
             
-            -- Mantiene la velocidad si caes de una orilla y te frena al tocar el piso
             if not speedGlitchConnection then
                 speedGlitchConnection = RunService.Stepped:Connect(function()
                     if speedGlitchEnabled and player.Character then
@@ -3194,7 +3216,6 @@ UIElements.ToggleSpeedGlitch = Tabs.Movimiento:Toggle({
                 end)
             end
         else
-            -- Apagado limpio
             if speedGlitchConnection then speedGlitchConnection:Disconnect(); speedGlitchConnection = nil end
             if jumpRequestConnection then jumpRequestConnection:Disconnect(); jumpRequestConnection = nil end
             
@@ -3233,7 +3254,6 @@ UserInputService.JumpRequest:Connect(function()
         local char = player.Character 
         if char then 
             local hum = char:FindFirstChildOfClass("Humanoid") 
-            -- Verificamos que esté en el aire (Freefall) para no duplicar el salto en el piso
             if hum and hum:GetState() == Enum.HumanoidStateType.Freefall then 
                 hum:ChangeState(Enum.HumanoidStateType.Jumping) 
             end 
@@ -3249,9 +3269,6 @@ Tabs.Movimiento:Section({ Title = "Modo Fantasma" })
 local invisHumanoid = nil; local invisHumanoidRootPart = nil; local isInvisible = false; local invisCharacterParts = {}; local invisHeartbeatConnection = nil; local invisBg = nil; local invisBv = nil; local invisFlySpeed = 40 
 local ghostBtn, getGhostClick, ghostStroke = createFloatingBtn("Ghost", UDim2.new(1, -10, 0.5, 69), "BtnFantasma")
 
--- ==========================================
--- BOTÓN FLOTANTE: BOMB JUMP (COOLDOWN DINÁMICO, ANTI-BUG Y DETECCIÓN MANUAL)
--- ==========================================
 local bombBtn, getBombClick, bombStroke = createFloatingBtn("Bomb Jump", UDim2.new(1, -10, 0.5, 115), "BtnBombJump")
 
 local bombCooldownEnd = 0
@@ -3263,7 +3280,6 @@ local function TriggerBombCooldown()
     bombOnCooldown = true
     
     task.spawn(function()
-        -- 🔥 Estilo de carga (Morado oscuro apagado)
         bombBtn.BackgroundColor3 = Color3.fromHex("#120b18") 
         bombStroke.Color = Color3.fromHex("#2e1c3b")
         bombBtn.TextColor3 = Color3.fromRGB(150, 130, 170)
@@ -3276,7 +3292,6 @@ local function TriggerBombCooldown()
         end
         
         if bombBtn and bombBtn.Parent then
-            -- 🔥 Regresa al estilo Onyx Normal
             bombBtn.Text = "Bomb Jump"
             bombBtn.BackgroundColor3 = Color3.fromHex("#09070c")
             bombStroke.Color = Color3.fromHex("#1a1225")
@@ -3286,7 +3301,6 @@ local function TriggerBombCooldown()
     end)
 end
 
--- 🕵️‍♂️ Escáner IA: Sincroniza el botón si el VIP usa la bomba manualmente (Clic normal)
 local function hookBomb(tool)
     if tool:IsA("Tool") and (string.find(tool.Name, "Bomb") or string.find(tool.Name, "FakeBomb")) then
         if not tool:GetAttribute("BombHooked") then
@@ -3298,7 +3312,6 @@ local function hookBomb(tool)
     end
 end
 
--- 📡 Mantener vigilado el inventario del jugador
 task.spawn(function()
     pcall(function()
         for _, item in ipairs(player.Backpack:GetChildren()) do hookBomb(item) end
@@ -3312,11 +3325,10 @@ task.spawn(function()
     end)
 end)
 
--- 🎯 Lógica cuando presionas el botón flotante del Hub
 bombBtn:FindFirstChild("Hit").MouseButton1Click:Connect(function()
     if not getBombClick() then return end
     
-    if tick() < bombCooldownEnd then return end -- Si sigue en cooldown, ignora el clic
+    if tick() < bombCooldownEnd then return end
     
     local char = player.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -3338,7 +3350,6 @@ bombBtn:FindFirstChild("Hit").MouseButton1Click:Connect(function()
     bomb = checkBomb(char) or checkBomb(backpack)
     
     if bomb and hrp and hum then
-        -- Activamos el bloqueo en el botón de inmediato
         TriggerBombCooldown()
         
         task.spawn(function()
@@ -3348,11 +3359,9 @@ bombBtn:FindFirstChild("Hit").MouseButton1Click:Connect(function()
                     task.wait(0.05) 
                 end
 
-                -- Tiramos la bomba al suelo
                 local dropCFrame = hrp.CFrame * CFrame.Angles(math.rad(-90), 0, 0)
                 bomb.Remote:FireServer(dropCFrame, 50) 
                 
-                -- Hacemos que el jugador salte automáticamente
                 task.wait(0.03) 
                 hum:ChangeState(Enum.HumanoidStateType.Jumping)
             end)
@@ -3441,7 +3450,6 @@ local function ToggleInvisibilityState()
 	isInvisible = not isInvisible
 
 	if isInvisible then
-		-- Transparencia local de partes
 		for _, part in ipairs(invisCharacterParts) do
 			pcall(function()
 				if not part:FindFirstChild("OrigTrans") then
@@ -3476,7 +3484,6 @@ local function ToggleInvisibilityState()
 	end
 end
 
--- Click bubble: no depender de validClick flaky (solo bloquea en modo editar)
 local _ghostHit = ghostBtn and ghostBtn:FindFirstChild("Hit")
 if _ghostHit then
 	_ghostHit.MouseButton1Click:Connect(function()
@@ -3487,7 +3494,6 @@ end
 
 local cachedGhostControls = nil
 if not invisHeartbeatConnection then
-	-- noop placeholder; real heartbeat starts when bubble shown
 end
 
 RunService.RenderStepped:Connect(function()
@@ -3496,7 +3502,6 @@ RunService.RenderStepped:Connect(function()
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 
-	-- Re-crear movers si el juego los borro
 	if not (invisBv and invisBv.Parent) or not (invisBg and invisBg.Parent) then
 		setupGhostMovers()
 	end
@@ -3518,7 +3523,6 @@ RunService.RenderStepped:Connect(function()
 			moveVector = cachedGhostControls:GetMoveVector()
 		end)
 	end
-	-- Fallback WASD/stick via Humanoid MoveDirection
 	if moveVector.Magnitude < 0.05 then
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if hum and hum.MoveDirection.Magnitude > 0.05 then
@@ -3538,10 +3542,9 @@ RunService.RenderStepped:Connect(function()
 		moveDir = Vector3.zero
 	end
 
-	-- Vuelo: mover + un poco de hold altitude
 	local vel = moveDir * invisFlySpeed
 	if vel.Magnitude < 0.1 then
-		vel = Vector3.new(0, 0.15, 0) -- flotar leve
+		vel = Vector3.new(0, 0.15, 0)
 	end
 	pcall(function()
 		invisBv.Velocity = vel
@@ -3590,19 +3593,14 @@ player.CharacterAdded:Connect(function()
 end)
 
 
--- ==========================================
--- 🔄 EVENTO MAESTRO: RECONEXIÓN AL REAPARECER
--- ==========================================
 player.CharacterAdded:Connect(function(newChar)
-    -- 1. Reconectar el Vuelo automáticamente si dejaron el Toggle prendido
     if flying then
         task.spawn(function()
-            task.wait(0.25) -- Pequeña pausa para asegurar que el mapa cargó el personaje
+            task.wait(0.25)
             inyectarVuelo(newChar)
         end)
     end
     
-    -- 2. Reconectar el WalkSpeed instantáneamente
     if walkSpeedEnabled then
         task.spawn(function()
             local hum = newChar:WaitForChild("Humanoid", 3)
@@ -3612,11 +3610,6 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 
--- ==========================================
--- 🎭 SISTEMA DE ANIMACIONES (ESTILO DUELOS)
--- ==========================================
-
--- 1. BASE DE DATOS LOCAL
 local animationData = {
     ["Old School"] = { Walk = 10921244891, Run = 10921240218, Jump = 10921242013, Fall = 10921241244, SwimIdle = 10921244018, Swim = 10921243048, Idle = 10921230744, Idle2 = 10921232093, Climb = 10921229866 },
     ["Adidas Sports"] = { Walk = 18537392113, Run = 18537384940, Jump = 18537380791, Fall = 18537367238, SwimIdle = 18537387180, Swim = 18537389531, Idle = 18537376492, Idle2 = 18537371272, Climb = 18537363391 },
@@ -3644,7 +3637,6 @@ local animationData = {
     ["Cartoon"] = { Walk = 742640026, Run = 742638842, Jump = 742637942, Fall = 742637151, SwimIdle = 742639812, Swim = 742639220, Idle = 742637544, Idle2 = 742638445, Climb = 742636889 }
 }
 
--- 2. LIMPIEZA DE TRACKS PREVIOS
 local function clearAllAnimations()
     local char = player.Character
     if not char then return end
@@ -3662,7 +3654,6 @@ end
 local animacionActualActiva = nil 
 local misAnimacionesOriginales = nil 
 
--- 3. INYECTOR UNIVERSAL
 local function applyCustomAnims(customData)
     if not customData then return end
     local char = player.Character
@@ -3733,7 +3724,6 @@ local function applyCustomAnims(customData)
     end
 end
 
--- 4. BUCLE ANTI-RESETEO (Mantiene las animaciones vivas tras respawn)
 task.spawn(function()
     while task.wait(1) do
         if animacionActualActiva then
@@ -3757,7 +3747,6 @@ task.spawn(function()
     end
 end)
 
--- 5. INTERFAZ WINDUI EN TABS.EMOTES
 local animList = {"None"}
 for name, _ in pairs(animationData) do table.insert(animList, name) end
 table.sort(animList)
@@ -3843,7 +3832,6 @@ end
 Tabs.Troll:Section({ Title = "Herramientas de Fling" })
 
 local isFlingingActive = false
--- touchFlingEnabled already declared at top of script
 local env = getgenv and getgenv() or _G
 env.timeout = env.timeout or 2.5
 
@@ -3948,7 +3936,6 @@ local function flingTarget(TargetPlayer)
     end)
 end
 
--- Floating Fling bubbles (mismo estilo que el resto, vía createFloatingBtn)
 flingMurderFloatingBtn, getFlingMurderClick = createFloatingBtn("Fling Murder", UDim2.new(1, -58, 0.5, -23), "BtnFlingMurder")
 flingMurderFloatingBtn:FindFirstChild("Hit").MouseButton1Click:Connect(function()
     if not getFlingMurderClick() then return end
@@ -3962,7 +3949,6 @@ flingMurderFloatingBtn:FindFirstChild("Hit").MouseButton1Click:Connect(function(
 end)
 
 flingSheriffFloatingBtn, getFlingSheriffClick = createFloatingBtn("Fling Sheriff", UDim2.new(1, -58, 0.5, 23), "BtnFlingSheriff")
--- Sheriff bubble: azul como antes
 flingSheriffFloatingBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
 do
     local g = flingSheriffFloatingBtn:FindFirstChildOfClass("UIGradient")
@@ -4010,9 +3996,9 @@ Tabs.Troll:Button({
     end
 })
 
-end -- Graphics scope
+end
 
-do -- TrollExtra scope
+do
 local selectedFlingPlayer = ""
 local function getFlingPlayerNames()
     local names = {}
@@ -4080,7 +4066,6 @@ Tabs.Troll:Button({
 Tabs.Troll:Section({ Title = "Touch y Protección" })
 
 
--- ===================== TOUCH / FLING (lógica exacta del Multi-Hack) =====================
 local flingEnabled = false
 local flingThread = nil
 
@@ -4131,7 +4116,6 @@ Tabs.Troll:Toggle({
 })
 
 
--- Anti-Fling: keep the style already used in THIS script (not mm2)
 UIElements.ToggleAntiFling = Tabs.Troll:Toggle({
     Flag = "Anti_Fling",
     Title = "Anti-Fling",
@@ -4209,7 +4193,7 @@ Tabs.Bubbles:Toggle({
         for _, guiContainer in ipairs(guisToSearch) do
             if guiContainer then
                 for _, v in pairs(guiContainer:GetDescendants()) do
-                    if (v:IsA("TextLabel") or v:IsA("TextButton")) and v.Text and string.find(v.Text, "VXS") or string.find(v.Text, "Open OnyxHub") then
+                    if (v:IsA("TextLabel") or v:IsA("TextButton")) and v.Text and string.find(v.Text, "VXS") or string.find(v.Text, "Open FlexusHub") then
                         local btnContainer = v
                         while btnContainer.Parent and not btnContainer.Parent:IsA("ScreenGui") and not btnContainer.Parent:IsA("Folder") do
                             btnContainer = btnContainer.Parent
@@ -4246,9 +4230,9 @@ Tabs.Bubbles:Toggle({
     end
 })
 
-task.wait() -- 🔥 AÑADE ESTO
+task.wait()
 
-end -- TrollExtra scope
+end
 
 Tabs.Config:Section({ Title = "Configuracion" })
 Tabs.Config:Paragraph({
@@ -4361,16 +4345,12 @@ task.spawn(function()
 end)
 
 
-
--- ==========================================
--- 🔥 FIX DEFINITIVO: VRAM CACHE (0 LAG AL ABRIR/CERRAR EL HUB)
--- ==========================================
 task.spawn(function()
     task.wait(1) 
     
     local core = pcall(function() return game:GetService("CoreGui") end) and game:GetService("CoreGui")
     local pGui = player:FindFirstChild("PlayerGui")
-    local windUI = (core and core:FindFirstChild("OnyxHub_WindUI")) or (pGui and pGui:FindFirstChild("OnyxHub_WindUI"))
+    local windUI = (core and core:FindFirstChild("FlexusHub_WindUI")) or (pGui and pGui:FindFirstChild("FlexusHub_WindUI"))
     
     if windUI then
         local mainCanvas = windUI:FindFirstChildWhichIsA("CanvasGroup", true)
@@ -4392,9 +4372,6 @@ task.spawn(function()
     end
 end)
 
--- ==========================================
--- MOTOR GENESIS IA INTEGRADO
--- ==========================================
 task.spawn(function()
     
    
@@ -4413,12 +4390,8 @@ local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 
 
--- ==========================================
--- 🕵️ SISTEMA DE RASTREO (360° SILENT AIM VIP)
--- ==========================================
 GetClosestTarget = function()
     local mejorObjetivo = nil
-    -- 🔥 AHORA USAMOS DISTANCIA 3D (360 GRADOS) EN VEZ DE LA PANTALLA
     local menorDistancia3D = (NathConfig and NathConfig.MaxTargetDist) or 5000 
     
     local myChar = LocalPlayer.Character
@@ -4454,11 +4427,9 @@ GetClosestTarget = function()
                 for _, nombreParte in ipairs(partesParaRevisar) do
                     local parteTarget = p.Character:FindFirstChild(nombreParte)
                     if parteTarget then
-                        -- Calculamos la distancia real entre tu personaje y el asesino
                         local dist3D = (parteTarget.Position - myRoot.Position).Magnitude
                         
                         if dist3D < menorDistancia3D then
-                            -- 🔥 YA NO COMPROBAMOS SI ESTÁ EN PANTALLA, PASAMOS DIRECTO AL RAYCAST 🔥
                             local rayParams = RaycastParams.new()
                             rayParams.FilterType = Enum.RaycastFilterType.Exclude
                             rayParams.IgnoreWater = true
@@ -4492,10 +4463,9 @@ GetClosestTarget = function()
                                 end
                             end
 
-                            -- Si no hay paredes atravesadas que estorben, fijamos objetivo
                             if not hitObstructed then
                                 mejorObjetivo = p.Character
-                                menorDistancia3D = dist3D -- Se actualiza para encontrar la parte más cercana
+                                menorDistancia3D = dist3D
                                 break 
                             end
                         end
@@ -4509,23 +4479,14 @@ GetClosestTarget = function()
 end
 
 
--- ==========================================
-
--- ⚙️ GENESIS CONFIG (V12.2)
-
--- ==========================================
-
--- ==========================================
--- ⚙️ GENESIS CONFIG (V12.2)
--- ==========================================
 local NathConfig = {
     AutoShoot = false,
     BulletSpeed = 3000,    
-    ShootDelay = 0.001,    -- 🔥 Reducido de 0.02 a 0.001 (Disparo casi instantáneo)
-    PredMultiplier = 0.85, -- 🔥 Aumentado de 0.65 a 0.85 para compensar la falta de delay artificial
+    ShootDelay = 0.001,
+    PredMultiplier = 0.85,
     MaxTargetDist = 5000, 
     ShowVisuals = true,
-    ReplicationBuffer = -0.015, -- 🔥 Usar un valor negativo para adelantar el paquete al servidor
+    ReplicationBuffer = -0.015,
     TargetPingEstimate = 0.03, 
     MaxLeadTime = 0.4,     
     LongRangeThreshold = 250,
@@ -4562,27 +4523,19 @@ task.spawn(function()
 
 end)
 
--- 🔥 RASTREADOR DE FPS (Para Desync)
 local currentFPS = 60
 RunService.Heartbeat:Connect(function(deltaTime)
     currentFPS = math.clamp(1 / deltaTime, 15, 240)
 end)
 
 
--- ==========================================
-
--- 🌐 VPS BRIDGE - Conexión con Genesis Server
-
--- ==========================================
-
-
 local VPS = {
 
-    IP = "108.174.154.25", -- Tu IP de la VPS
+    IP = "108.174.154.25",
 
-    PORT = "22022",       -- El puerto del servidor Flask
+    PORT = "22022",
 
-    SECRET = "mi_clave_secreta_super_random_xyz789", -- Key de seguridad
+    SECRET = "mi_clave_secreta_super_random_xyz789",
 
     SessionID = HttpService:GenerateGUID(false)
 
@@ -4590,12 +4543,9 @@ local VPS = {
 
 
 local function SendToVPS(...)
-    -- disabled (no external web)
     return nil
 end
 
-
--- Función segura para recolectar el estado actual de tu Auto-Tuner
 
 local function CollectStats()
 
@@ -4650,8 +4600,6 @@ local function CollectStats()
 end
 
 
--- 1. Heartbeat Loop (Avisa cada 15 segundos que sigues vivo)
-
 task.spawn(function()
 
     task.wait(3)
@@ -4669,8 +4617,6 @@ task.spawn(function()
         local success, resData = SendToVPS("/heartbeat", payload)
 
         
-        -- 🔥 AQUÍ SUCEDE LA MAGIA: Lua se reescribe con la mente de Génesis
-
         if success and resData and resData.config_overrides then
 
             for configKey, newValue in pairs(resData.config_overrides) do
@@ -4695,11 +4641,9 @@ task.spawn(function()
 end)
 
 
--- 2. Reporte de Estadísticas (Avisa cada 60 segundos con updates)
-
 task.spawn(function()
 
-    task.wait(10) -- Manda el primer reporte a los 10 segundos
+    task.wait(10)
 
     while true do
 
@@ -4713,18 +4657,12 @@ task.spawn(function()
 
         SendToVPS("/report_stats", payload)
 
-        task.wait(60) -- Luego ya espera 60s
+        task.wait(60)
 
     end
 
 end)
 
-
--- ==========================================
-
--- 🌌 MEDIDOR DE GRAVEDAD EFECTIVA
-
--- ==========================================
 
 local MeasuredGravity = {}
 
@@ -4780,12 +4718,6 @@ local function GetEffectiveGravity(player)
 end
 
 
--- ==========================================
-
--- 🌊 ONE EURO FILTER (anti-jitter)
-
--- ==========================================
-
 local OneEuroFilters = {}
 
 
@@ -4832,33 +4764,25 @@ end
 
 local function getEuroFilter(id, speed)
     if not OneEuroFilters[id] then 
-        OneEuroFilters[id] = makeOneEuro(15.0, 0.03) -- 🔥 Base súper rígida para que no haya delay al apuntar
+        OneEuroFilters[id] = makeOneEuro(15.0, 0.03)
         OneEuroFilters[id].lastStablePos = nil 
     end
     
-    -- 🧠 IA DINÁMICA: Ajuste agresivo ("Snappy")
-    -- 🧠 IA DINÁMICA: Reacción violenta e instantánea
     if speed then
         if speed < 4 then
-            OneEuroFilters[id].minCutoff = 2.0  -- Reacción hiper-rápida de cerca
+            OneEuroFilters[id].minCutoff = 2.0
             OneEuroFilters[id].beta = 0.01
         elseif speed > 20 then
-            OneEuroFilters[id].minCutoff = 15.0  -- Latigazo agresivo si corre o salta
+            OneEuroFilters[id].minCutoff = 15.0
             OneEuroFilters[id].beta = 0.03
         else
-            OneEuroFilters[id].minCutoff = 8.0   -- Cero delay en movimiento normal
+            OneEuroFilters[id].minCutoff = 8.0
             OneEuroFilters[id].beta = 0.02
         end
     end
     return OneEuroFilters[id]
 end
 
-
--- ==========================================
-
--- ⚙️ AUTO-TUNING
-
--- ==========================================
 
 local ShotHistory = {} 
 
@@ -4955,12 +4879,6 @@ local function GetTunedPredMult() return NathConfig.PredMultiplier + AdaptiveTun
 local function GetTunedBuffer() return NathConfig.ReplicationBuffer + AdaptiveTuning.BufferBias end
 
 
--- ==========================================
-
--- 🐰 BHOP RHYTHM PREDICTOR
-
--- ==========================================
-
 local BhopData = {}
 
 
@@ -5037,12 +4955,6 @@ local function GetBhopPrediction(playerId, currentVelY, isAirborne)
 end
 
 
--- ==========================================
-
--- 🚀 JUMP IMPULSE DETECTOR
-
--- ==========================================
-
 local JumpImpulse = {}
 
 
@@ -5096,12 +5008,6 @@ local function GetJumpCompensation(player, leadT)
 
 end
 
-
--- ==========================================
-
--- 💨 AIR CONTROL ESTIMATOR
-
--- ==========================================
 
 local AirControl = {}
 
@@ -5160,24 +5066,12 @@ local function GetAirControlPenalty(playerId)
 end
 
 
--- ==========================================
-
--- 🧠 EKF CON JERK (V12)
-
--- ==========================================
-
 local VelocityHistory = {}
 
 local HISTORY_SIZE = 10
 
 local EKFStates = {}
 
-
--- ==========================================
-
--- 🧠 LSTM-LITE
-
--- ==========================================
 
 local LSTM = {Wf={},Wi={},Wo={},Wc={}, bf={},bi={},bo={},bc={}, Wy={}, by={}, lr=0.005, initialized=false}
 
@@ -5241,12 +5135,6 @@ end
 
 InitLSTM()
 
-
--- ==========================================
-
--- 🦅 AERIAL NEURAL NETWORK
-
--- ==========================================
 
 local AerialNN = {W1={}, b1={}, W2={}, b2={}, lr=0.012, initialized=false}
 
@@ -5406,12 +5294,6 @@ task.spawn(function()
 
 end)
 
-
--- ==========================================
-
--- 💾 NEURAL PERSISTENCE SYSTEM
-
--- ==========================================
 
 local SAVE_FILE = "FlexusHub_MM2_Neural.json"
 
@@ -5593,21 +5475,12 @@ task.spawn(function()
 end)
 
 
--- Aquí borramos el BindToClose que crasheaba todo alv
-
-
 LocalPlayer.AncestryChanged:Connect(function()
 
     if not LocalPlayer.Parent then SaveBrain() end
 
 end)
 
-
--- ==========================================
-
--- 🧠 PATTERN DETECTOR Y PARTICLE FILTER
-
--- ==========================================
 
 local PatternData = {}
 
@@ -5684,12 +5557,6 @@ local function ParticlePredict(targetPos, vel, accel, t, isAirborne, effGravity,
 
 end
 
-
--- ==========================================
-
--- 🧠 COMPENSACIÓN, CONFIANZA Y ESTADOS
-
--- ==========================================
 
 local SelfStateHistory = {samples = {}, lastPos = nil, lastTime = 0}
 
@@ -5926,9 +5793,8 @@ end
 
 local function GetAdaptiveReplicationBuffer(distance, vel)
     local baseBuffer = GetTunedBuffer()
-    -- 🔥 Casi cero delay artificial, pura reacción cruda
     if distance < 35 then 
-        return baseBuffer * 0.02 -- Reacción pura en corto alcance
+        return baseBuffer * 0.02
     elseif distance < 100 then 
         return baseBuffer * 0.15 
     end
@@ -5946,12 +5812,6 @@ local function GetDynamicLeadCap(distance)
 
 end
 
-
--- ==========================================
-
--- 🌌 RELATIVE PHYSICS SOLVER
-
--- ==========================================
 
 local function SolveRelativePhysics(myOrigin, myVel, myAirborne, targetPos, targetVel, targetAirborne, effGravity)
 
@@ -6034,14 +5894,7 @@ local function SolveRelativePhysics(myOrigin, myVel, myAirborne, targetPos, targ
 end
 
 
--- ==========================================
-
--- 🎯 HITBOX-AWARE & RAYCASTS
-
--- ==========================================
-
 local function GetOptimalHitPoint(part, origin, velocity, leadTime)
-    -- 🔥 FIX: Retornamos el centro exacto de la parte sin mover la mira a los bordes. Cero picos.
     return part.Position
 end
 
@@ -6051,7 +5904,6 @@ local function IsTrajectoryClear(origin, predictedPos, targetChar)
     params.FilterType = Enum.RaycastFilterType.Exclude
     params.IgnoreWater = true
     
-    -- Ignora a los demás jugadores vivos para que no estorben el tiro
     local ignoreList = {LocalPlayer.Character, Camera}
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character ~= targetChar then
@@ -6064,7 +5916,6 @@ local function IsTrajectoryClear(origin, predictedPos, targetChar)
     local distLeft = dir.Magnitude
     local curOrigin = origin
 
-    -- Bucle para perforar hasta 5 capas de paredes falsas o cristales
     for i = 1, 5 do
         local res = Workspace:Raycast(curOrigin, dir.Unit * distLeft, params)
         if not res or (res.Instance and res.Instance:IsDescendantOf(targetChar)) then return true end
@@ -6075,7 +5926,7 @@ local function IsTrajectoryClear(origin, predictedPos, targetChar)
             curOrigin = res.Position + (dir.Unit * 0.01)
             distLeft = (predictedPos - curOrigin).Magnitude
         else
-            return false -- Chocó con pared sólida real
+            return false
         end
     end
     return false
@@ -6140,12 +5991,6 @@ local function JustPeeked(player, windowSec)
 
 end
 
-
--- ==========================================
-
--- 🎲 HMM INTENT PREDICTOR
-
--- ==========================================
 
 local HMMStates = {}
 
@@ -6233,12 +6078,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 
 
--- ==========================================
-
--- 🎨 UI & VISUALS
-
--- ==========================================
-
 local UI_Container = Instance.new("ScreenGui")
 
 UI_Container.Name = "FlexusVisuals"
@@ -6324,14 +6163,12 @@ local function GetPredictedPosition(targetChar)
     
     if not myRoot or not tempRoot or not humanoid then return nil, nil end
 
-    -- Apuntar al Torso siempre da los tiros más consistentes
     local bestPart = targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso") or tempRoot
     local origin = Camera.CFrame.Position
     local distance = (bestPart.Position - origin).Magnitude
     
     local velocity = tempRoot.AssemblyLinearVelocity
     
-    -- CERO TEMBLORES: Ignoramos micro-movimientos
     if velocity.Magnitude < 3.5 then
         velocity = Vector3.zero
     end
@@ -6339,27 +6176,20 @@ local function GetPredictedPosition(targetChar)
     local mm2GunDelay = 0.12 
     local safePing = math.clamp(currentPing, 0.01, 0.10)
     
-    -- 🛠️ FIX: Redujimos el impacto de la distancia en el cálculo porque en MM2 la bala viaja muy rápido
     local timeToHit = mm2GunDelay + safePing + (distance / 5000) 
     
-    -- 🧠 AMORTIGUADOR DE LEJANÍA (Distance Falloff):
-    -- Si el wey está a más de 50 studs de ti, bajamos la intensidad de la predicción 
-    -- progresivamente (hasta un máximo de 65% de fuerza) para no apuntar demasiado lejos de él.
     local intensityMult = 1.0
     if distance > 50 then
         intensityMult = math.clamp(1 - ((distance - 50) / 250), 0.65, 1.0)
     end
     timeToHit = timeToHit * intensityMult
 
-    -- Compensación horizontal
     local predX = velocity.X * timeToHit
     local predZ = velocity.Z * timeToHit
     local predY = 0
 
-    -- 🎈 Compensación vertical solo si está en el aire
     local isAirborne = humanoid:GetState() == Enum.HumanoidStateType.Freefall or humanoid:GetState() == Enum.HumanoidStateType.Jumping
     if isAirborne then
-        -- Cancelamos la caída natural sumando la gravedad (afectada por el amortiguador)
         local gravityDrop = 0.5 * Workspace.Gravity * (timeToHit ^ 2)
         predY = (velocity.Y * timeToHit) - gravityDrop
     else
@@ -6369,7 +6199,6 @@ local function GetPredictedPosition(targetChar)
     local predictionOffset = Vector3.new(predX, predY, predZ)
     local rawPred = bestPart.Position + predictionOffset
 
-    -- 🧱 ANTI-PAREDES
     if not IsTrajectoryClear(origin, rawPred, targetChar) then
         local headPart = targetChar:FindFirstChild("Head")
         if headPart then
@@ -6385,12 +6214,10 @@ end
 
 
 GetSmartShotPosition = function(targetChar)
-    -- 1. Sacamos la predicción perfecta de nuestra matemática
     local predictedPos, bestPart = GetPredictedPosition(targetChar)
 
     if not bestPart or not predictedPos then return nil end
 
-    -- 2. Mantenemos el rastreador de memoria de IA para que no se rompa el Genesis
     local targetPlayer = Players:GetPlayerFromCharacter(targetChar)
     local bodyVisibleNow = IsVisible(bestPart.Position, targetChar)
     
@@ -6398,20 +6225,12 @@ GetSmartShotPosition = function(targetChar)
         UpdateVisibilityMemory(targetPlayer, bodyVisibleNow) 
     end
     
-    -- 🔥 FIX: Le ordenamos al arma que regrese EXACTAMENTE la misma posición de la mira
-    -- Ya no hay microLead, ni snapPos, ni desvíos pendejos.
     return predictedPos
 end
 
 
--- ==========================================
-
--- ⏱️ CONVERGENCE QUALITY GATE 2.0 (FIX)
-
--- ==========================================
-
 local lastShotTime = 0
-local SHOT_COOLDOWN = 0.01 -- 🔥 Dispara en cuanto tiene la oportunidad
+local SHOT_COOLDOWN = 0.01
 
 
 local function CalculateShotQuality(targetChar, predictedPos)
@@ -6432,29 +6251,24 @@ local function CalculateShotQuality(targetChar, predictedPos)
             
             local timeDiff = tick() - data.lastTime
             
-            -- 📡 1. RESOLVER ANTI-LAG (Stutter Catcher)
-            -- Si se movió más rápido de lo que permite el juego (aprox 25 studs/sec en MM2), está lageado o teletransportándose.
             if timeDiff > 0.01 then
                 local realSpeed = (currentPos - lastPos).Magnitude / timeDiff
                 if realSpeed > 55 then 
-                    return 0 -- Cancela el tiro, el wey es un fantasma por el lag
+                    return 0
                 end
             end
 
             if v1.Magnitude > 1 and v0.Magnitude > 1 then
                 local dot = v1.Unit:Dot(v0.Unit)
                 if dot < -0.2 then 
-                    quality = 1.5 -- Sigue forzando el tiro en el punto muerto
+                    quality = 1.5
                 elseif dot < 0.5 then 
-                    -- 🔥 FIX: Reducimos el castigo en el suelo. Ya no lo baja a 0.4, 
-                    -- lo deja en 0.85 para que la IA dispare aunque haga zig-zag.
                     quality = quality * 0.85 
                 end
             end
             
-            -- Si su velocidad actual es casi cero pero hace un momento corría, está paralizado cambiando de lado. Tiro seguro.
             if v1.Magnitude < 3 and v0.Magnitude > 12 then
-                quality = 2.0 -- Prioridad absoluta de disparo
+                quality = 2.0
             end
         end
         
@@ -6475,12 +6289,9 @@ local function DispararEventoDirecto(forceShoot)
     local predictedPos = GetSmartShotPosition(targetChar)
     if not predictedPos then return end
 
-    -- 🧱 SEGURO ANTI-PAREDES
     local myHead = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head")
     local origin = myHead and myHead.Position or Camera.CFrame.Position
     
-    -- 🔥 MODIFICACIÓN AQUÍ: Si es Autoshoot (forceShoot = false) y no hay línea limpia, se bloquea.
-    -- Si es el botón Manual (forceShoot = true), ignora el bloqueo del script y dispara aunque esté rojo.
     if not forceShoot and not IsTrajectoryClear(origin, predictedPos, targetChar) then
         return 
     end
@@ -6496,7 +6307,6 @@ local function DispararEventoDirecto(forceShoot)
     if myAir and tAir then minQuality = 0.02
     elseif myAir or tAir then minQuality = 0.03 end
 
-    -- Las comprobaciones de calidad también se ignoran si el disparo es manual
     if not forceShoot and quality < minQuality then return end
     
     local char = LocalPlayer.Character
@@ -6509,19 +6319,15 @@ local function DispararEventoDirecto(forceShoot)
     end
     
     if gun then
-        -- 1. EQUIPAR EL ARMA SIN ESPERAS
         if gun.Parent == LocalPlayer.Backpack then 
             char.Humanoid:EquipTool(gun) 
-            -- 🔥 Usamos un micro-wait para que el server lo procese sin congelar tu cámara
             task.wait() 
         end
         
-        -- 2. HACER EL FLICK (PARALELO, SIN CONGELAR EL TIRO)
         local cam = workspace.CurrentCamera
         local originalCFrame = cam.CFrame
         
         
-        -- 3. DISPARAR (El servidor recibe el tiro instantáneamente)
         local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
         if targetHRP then
             local velocity = targetHRP.AssemblyLinearVelocity
@@ -6537,7 +6343,6 @@ local function DispararEventoDirecto(forceShoot)
                 moveDirection = (moveDirection + Vector3.new(0.001, 0, 0.001)).Unit
             end
             
-            -- 🔥 FIX: Usamos el cañón de la pistola como origen, no la cabeza.
             local originPos = Camera.CFrame.Position
             if gun and gun:FindFirstChild("Handle") then
                 originPos = gun.Handle.Position
@@ -6545,16 +6350,13 @@ local function DispararEventoDirecto(forceShoot)
             local shootDirection = (predictedPos - originPos).Unit
 
             local fakeOriginPos = originPos
-            -- Quitamos los 5 studs extra para que la bala estalle EXACTO en el centro del Murderer
             local fakeTargetPos = predictedPos
 
             local originCFrame = CFrame.new(fakeOriginPos, fakeTargetPos)
             local targetCFrame = CFrame.new(fakeTargetPos)
 
-            -- Disparamos el evento de MM2
             pcall(function() gun.Shoot:FireServer(originCFrame, targetCFrame) end)
             
-            -- Creamos el efecto visual
             pcall(function() gun.KnifeLocal.CreateBeam.RemoteFunction:InvokeServer(1, predictedPos, "Nath2") end)
             
             lastShotTime = tick()
@@ -6571,12 +6373,6 @@ local function DispararEventoDirecto(forceShoot)
     end
 end
 
-
--- ==========================================
-
--- ⌨️ COMANDOS MANUALES (PERSISTENCIA)
-
--- ==========================================
 
 UserInputService.InputBegan:Connect(function(input, gpe)
 
@@ -6601,9 +6397,6 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end)
 
 
--- ==========================================
--- 🎨 VISUALS IN-GAME (CAJA Y MIRAS PERSONALIZABLES)
--- ==========================================
 local CurrentPosBox = Instance.new("Frame")
 CurrentPosBox.Size = UDim2.new(0, 20, 0, 20)
 CurrentPosBox.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -6620,13 +6413,11 @@ PredictionCrosshair.BackgroundTransparency = 1
 PredictionCrosshair.Visible = false
 PredictionCrosshair.Parent = UI_Container
 
--- Estilo 1: Punto Clásico
 local CrossDot = Instance.new("Frame", PredictionCrosshair)
 CrossDot.Size = UDim2.new(0, 8, 0, 8)
 CrossDot.AnchorPoint, CrossDot.Position = Vector2.new(0.5, 0.5), UDim2.new(0.5, 0, 0.5, 0)
 Instance.new("UICorner", CrossDot).CornerRadius = UDim.new(1, 0)
 
--- Estilo 2: Cruz
 local CrossT2 = Instance.new("Frame", PredictionCrosshair)
 CrossT2.Size = UDim2.new(1, 0, 1, 0)
 CrossT2.BackgroundTransparency = 1
@@ -6637,7 +6428,6 @@ local cH = Instance.new("Frame", CrossT2)
 cH.Size = UDim2.new(0, 20, 0, 2)
 cH.AnchorPoint, cH.Position = Vector2.new(0.5, 0.5), UDim2.new(0.5, 0, 0.5, 0)
 
--- Estilo 3: Anillo
 local CrossT3 = Instance.new("Frame", PredictionCrosshair)
 CrossT3.Size = UDim2.new(0, 16, 0, 16)
 CrossT3.AnchorPoint, CrossT3.Position = Vector2.new(0.5, 0.5), UDim2.new(0.5, 0, 0.5, 0)
@@ -6650,8 +6440,7 @@ c3Dot.Size = UDim2.new(0, 4, 0, 4)
 c3Dot.AnchorPoint, c3Dot.Position = Vector2.new(0.5, 0.5), UDim2.new(0.5, 0, 0.5, 0)
 Instance.new("UICorner", c3Dot).CornerRadius = UDim.new(1, 0)
 
--- Variable global para recordar qué mira elegiste
-_G.OnyxCrosshairType = 1 -- 1=Punto, 2=Cruz, 3=Anillo
+_G.FlexusCrosshairType = 1
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -6667,11 +6456,6 @@ local function IsVisible(predictedPos, targetChar)
     return false
 end
 
--- ==========================================
--- 🎥 BUCLE VISUAL Y UI (SINCROMIZACIÓN PERFECTA)
--- ==========================================
--- BindToRenderStep con prioridad Camera + 1 asegura que el UI se dibuje 
--- EXACTAMENTE después de que el juego mueve a los personajes. Cero lag visual.
 RunService:BindToRenderStep("FlexusAimbotVisuals", Enum.RenderPriority.Camera.Value + 1, function()
     UpdateSelfState()
     
@@ -6694,7 +6478,6 @@ RunService:BindToRenderStep("FlexusAimbotVisuals", Enum.RenderPriority.Camera.Va
                 
                 local origin = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") and LocalPlayer.Character.Head.Position or Camera.CFrame.Position
                 
-                -- Cambia el color de la mira si el tiro está limpio
                 local cColor = IsTrajectoryClear(origin, predictedPos, targetChar) and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 190, 40)
                 
                 CrossDot.BackgroundColor3 = cColor
@@ -6703,12 +6486,12 @@ RunService:BindToRenderStep("FlexusAimbotVisuals", Enum.RenderPriority.Camera.Va
                 c3Stroke.Color = cColor
                 c3Dot.BackgroundColor3 = cColor
                 
-                CrossDot.Visible = (_G.OnyxCrosshairType == 1)
-                CrossT2.Visible = (_G.OnyxCrosshairType == 2)
-                CrossT3.Visible = (_G.OnyxCrosshairType == 3)
+                CrossDot.Visible = (_G.FlexusCrosshairType == 1)
+                CrossT2.Visible = (_G.FlexusCrosshairType == 2)
+                CrossT3.Visible = (_G.FlexusCrosshairType == 3)
 
                 CurrentPosBox.Visible = true
-                PredictionCrosshair.Visible = showCrosshairEnabled -- Ahora respeta el botón
+                PredictionCrosshair.Visible = showCrosshairEnabled
 
     
             else
@@ -6721,13 +6504,9 @@ RunService:BindToRenderStep("FlexusAimbotVisuals", Enum.RenderPriority.Camera.Va
 end)
 
 
--- ==========================================
--- 🔥 SISTEMA AUTOSHOOT INSTANTÁNEO (HEARTBEAT ZERO-DELAY)
--- ==========================================
 local lastAutoShootTime = 0
 RunService.Heartbeat:Connect(function()
     if NathConfig.AutoShoot then
-        -- 🔥 Disparamos sin condición de tiempo si es válido, el cooldown real lo maneja DispararEventoDirecto
         local char = LocalPlayer.Character
         local hasGun = char and char:FindFirstChild("Gun")
         
@@ -6744,10 +6523,8 @@ pcall(function()
         local method = getnamecallmethod()
         local args = {...}
         
-        -- Interceptamos "Shoot" (MM2) en lugar de "ShootStart"
         if not checkcaller() and method == "FireServer" and tostring(self) == "Shoot" then
             
-            -- 🔥 EL FIX: Si el AutoShoot está apagado, dejamos que el disparo sea 100% manual y nativo
             if not NathConfig.AutoShoot then
                 return oldNamecall(self, ...)
             end
@@ -6765,7 +6542,6 @@ pcall(function()
                         moveDirection = tHrp.CFrame.LookVector
                     end
 
-                    -- 🔥 FIX: Lo mismo aquí, aseguramos que el tiro manual salga desde la mano
                     local gun = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Gun")
                     local originPos = Camera.CFrame.Position
                     if gun and gun:FindFirstChild("Handle") then
@@ -6776,7 +6552,6 @@ pcall(function()
                     local fakeOriginPos = originPos
                     local fakeTargetPos = predictedPos
 
-                    -- Empaquetamos los argumentos como CFrames para MM2
                     args[1] = CFrame.new(fakeOriginPos, fakeTargetPos)
                     args[2] = CFrame.new(fakeTargetPos)
 
@@ -6789,12 +6564,6 @@ pcall(function()
 end)
 
 
--- ============================================================
-
--- 👁️ SENSOR DE LECTURA DE RENDIMIENTO Y FÍSICA PARA GÉNESIS
-
--- ============================================================
-
 local ShotTelemetry = {
 
     Shots = 0,
@@ -6804,16 +6573,12 @@ local ShotTelemetry = {
 }
 
 
--- Esta función la conectas justo en la parte donde tu Aimbot dispara (FireServer)
-
 function RegistrarDisparoEfectuado()
 
     ShotTelemetry.Shots = ShotTelemetry.Shots + 1
 
 end
 
-
--- Esta función la conectas en tu detector de kills o cuando verifiques que bajó la vida del target
 
 function RegistrarImpactoExitoso()
 
@@ -6822,18 +6587,10 @@ function RegistrarImpactoExitoso()
 end
 
 
--- ============================================================
-
--- 🧠 FASE 1 + 5: GAME IDENTITY & CHAT LEARNING
-
--- ============================================================
-
 local MarketplaceService = game:GetService("MarketplaceService")
 
 local TextChatService = game:GetService("TextChatService")
 
-
--- ── FASE 1: Identidad del juego ──
 
 local function GenerateFingerprint()
 
@@ -6918,8 +6675,6 @@ task.spawn(function()
 end)
 
 
--- ── FASE 5: Aprendizaje de Chat ──
-
 local ChatBuffer = {}
 
 
@@ -6993,12 +6748,6 @@ for _, p in ipairs(Players:GetPlayers()) do pcall(function() p.Chatted:Connect(f
 Players.PlayerAdded:Connect(function(p) pcall(function() p.Chatted:Connect(function(msg) BufferChatMessage(p.Name, msg) end) end) end)
 
 
--- ============================================================
-
--- 🩸 FASE 3: REPORTAR DEATHS A GENESIS (Mood Engine)
-
--- ============================================================
-
 local function hookCharacter(char)
 
     local hum = char:WaitForChild("Humanoid", 5)
@@ -7021,26 +6770,12 @@ if LocalPlayer.Character then hookCharacter(LocalPlayer.Character) end
 LocalPlayer.CharacterAdded:Connect(hookCharacter)
 
 
--- NOTA: Para las Kills, mete esto donde tu aimbot confirme la kill:
-
--- SendToVPS("/event/kill", { place_id = game.PlaceId })
-
-
--- (Removed old Murderer Gun Aimbot / Silent Aim / Touch Fling extras)
-
--- ==========================================
--- 🌐 EXPORTAR IA AL HUB PRINCIPAL
--- ==========================================
 getgenv().NathConfig = NathConfig
 getgenv().DispararEventoDirecto = DispararEventoDirecto
     
 end)
 
 
-
--- ==========================================
--- EXTRA: Externo + Juegos compatibles (igual que Duels)
--- ==========================================
 ;(function()
     local BASE_SCRIPTS = "https://raw.githubusercontent.com/Israel-Vortex/FlexusHub-Team/refs/heads/main/Scripts-Flexus/Top-one/"
     local AVATAR_URL = BASE_SCRIPTS .. "AvatarCopier.lua"
@@ -7146,7 +6881,6 @@ end)
 end)()
 
 
--- ===== MUSIC =====
 ;(function()
     local musicTab = Tabs.Music
     if not musicTab then return end
@@ -7344,10 +7078,6 @@ end)()
     })
 end)()
 
--- ==========================================
--- AUTO CONFIG SAVE/LOAD (MM2)
--- Guarda toggles/sliders/dropdowns (Flags) y restaura al entrar
--- ==========================================
 pcall(function()
     local cm = Window and Window.ConfigManager
     if not cm then return end
